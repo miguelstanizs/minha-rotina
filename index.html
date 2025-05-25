@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minha Rotina</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Minha Rotina">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 10px;
+        }
+
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+            min-height: calc(100vh - 20px);
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .date-info {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 15px 10px;
+            text-align: center;
+            background: none;
+            border: none;
+            font-size: 12px;
+            font-weight: 600;
+            color: #6c757d;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .tab.active {
+            background: white;
+            color: #4facfe;
+            border-bottom: 3px solid #4facfe;
+        }
+
+        .tab:hover {
+            background: #e9ecef;
+        }
+
+        .content {
+            padding: 20px;
+            min-height: 400px;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .section-title {
+            font-size: 20px;
+            color: #333;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 24px;
+            background: #4facfe;
+            margin-right: 10px;
+            border-radius: 2px;
+        }
+
+        .card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border: 1px solid #e9ecef;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            width: 100%;
+            font-size: 16px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #6c757d;
+            padding: 40px 20px;
+        }
+
+        .empty-state .icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+            display: block;
+        }
+
+        /* Responsividade para iPhone */
+        @media (max-width: 380px) {
+            .container {
+                margin: 0;
+                border-radius: 0;
+                min-height: 100vh;
+            }
+            
+            .tab {
+                font-size: 11px;
+                padding: 12px 8px;
+            }
+        }
+
+        /* Estilo para modo escuro do iOS */
+        @media (prefers-color-scheme: dark) {
+            .container {
+                background: #1c1c1e;
+                color: white;
+            }
+            
+            .card {
+                background: #2c2c2e;
+                border-color: #3a3a3c;
+            }
+            
+            .tabs {
+                background: #2c2c2e;
+                border-color: #3a3a3c;
+            }
+            
+            .tab {
+                color: #8e8e93;
+            }
+            
+            .section-title {
+                color: white;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Minha Rotina</h1>
+            <div class="date-info" id="dateInfo"></div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('lembretes')">
+                📋 Lembretes
+            </button>
+            <button class="tab" onclick="showTab('rotina')">
+                💪 Rotina
+            </button>
+            <button class="tab" onclick="showTab('financeiro')">
+                💰 Financeiro
+            </button>
+        </div>
+
+        <div class="content">
+            <!-- ABA LEMBRETES -->
+            <div id="lembretes" class="tab-content active">
+                <div class="section-title">Meus Lembretes</div>
+                
+                <div class="empty-state">
+                    <span class="icon">📝</span>
+                    <h3>Nenhum lembrete ainda</h3>
+                    <p>Adicione suas tarefas e organize seu dia!</p>
+                </div>
+
+                <button class="btn" onclick="alert('Em breve: Adicionar lembretes!')">
+                    + Adicionar Lembrete
+                </button>
+            </div>
+
+            <!-- ABA ROTINA -->
+            <div id="rotina" class="tab-content">
+                <div class="section-title">Rotina de Hoje</div>
+                
+                <div class="card">
+                    <h3 style="margin-bottom: 15px; color: #4facfe;">🏋️ Treino</h3>
+                    <div class="empty-state">
+                        <span class="icon">💪</span>
+                        <h3>Configure seus treinos</h3>
+                        <p>Defina os exercícios para cada dia da semana</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 style="margin-bottom: 15px; color: #4facfe;">🍽️ Refeições</h3>
+                    <div class="empty-state">
+                        <span class="icon">🥗</span>
+                        <h3>Configure suas refeições</h3>
+                        <p>Defina seus horários e cardápio diário</p>
+                    </div>
+                </div>
+
+                <button class="btn" onclick="alert('Em breve: Configurar rotina!')">
+                    ⚙️ Configurar Rotina
+                </button>
+            </div>
+
+            <!-- ABA FINANCEIRO -->
+            <div id="financeiro" class="tab-content">
+                <div class="section-title">Controle Financeiro</div>
+                
+                <div class="card">
+                    <h3 style="margin-bottom: 15px; color: #4facfe;">💵 Resumo do Mês</h3>
+                    <div class="empty-state">
+                        <span class="icon">📊</span>
+                        <h3>Configure suas finanças</h3>
+                        <p>Defina salário, custos fixos e metas</p>
+                    </div>
+                </div>
+
+                <button class="btn" onclick="alert('Em breve: Configurar finanças!')">
+                    ⚙️ Configurar Finanças
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Função para mostrar a data atual
+        function updateDate() {
+            const now = new Date();
+            const options = { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            };
+            const dateString = now.toLocaleDateString('pt-BR', options);
+            document.getElementById('dateInfo').textContent = dateString;
+        }
+
+        // Função para trocar entre abas
+        function showTab(tabName) {
+            // Remover classe active de todas as abas
+            const tabs = document.querySelectorAll('.tab');
+            const contents = document.querySelectorAll('.tab-content');
+            
+            tabs.forEach(tab => tab.classList.remove('active'));
+            contents.forEach(content => content.classList.remove('active'));
+            
+            // Adicionar classe active na aba selecionada
+            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+        }
+
+        // Inicializar app
+        document.addEventListener('DOMContentLoaded', function() {
+            updateDate();
+            
+            // Solicitar permissão para notificações
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
+        });
+
+        // Atualizar data a cada minuto
+        setInterval(updateDate, 60000);
+    </script>
+</body>
+</html>
