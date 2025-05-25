@@ -683,9 +683,10 @@
         function carregarConfigTreinos() {
             // Carregar dias da semana
             const diasDiv = document.getElementById('diasSemana');
-            diasDiv.innerHTML = diasSemana.map(dia => `
+            diasDiv.innerHTML = diasSemana.map((dia, index) => `
                 <div class="dia-semana">
                     <strong style="width: 80px;">${dia.charAt(0).toUpperCase() + dia.slice(1)}:</strong>
+                    <span style="font-size: 12px; color: #6c757d; width: 60px;">(${index === 0 ? 'Dom' : index === 1 ? 'Seg' : index === 2 ? 'Ter' : index === 3 ? 'Qua' : index === 4 ? 'Qui' : index === 5 ? 'Sex' : 'Sáb'})</span>
                     <select id="select-${dia}">
                         <option value="">Descanso</option>
                         ${treinos.map(treino => 
@@ -764,8 +765,8 @@
             if (treino) {
                 treino.exercicios.push({
                     nome: '',
-                    series: 3,
-                    repeticoes: 10
+                    series: 4,
+                    repeticoes: 12
                 });
                 carregarConfigTreinos();
             }
