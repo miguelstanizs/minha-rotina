@@ -216,7 +216,6 @@
             font-size: 12px;
             font-weight: 600;
             text-align: center;
-            animation: pulse 2s infinite;
         }
 
         .alerta-hoje {
@@ -224,10 +223,83 @@
             color: #333;
         }
 
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
+        .exercicio-item {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+            border-left: 4px solid #4facfe;
+        }
+
+        .exercicio-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .exercicio-nome {
+            font-weight: 600;
+            color: #333;
+            flex: 1;
+        }
+
+        .exercicio-series {
+            font-size: 14px;
+            color: #6c757d;
+            margin-bottom: 8px;
+        }
+
+        .carga-input {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .carga-input input {
+            width: 60px;
+            padding: 6px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .carga-ultima {
+            font-size: 12px;
+            color: #28a745;
+            font-weight: 600;
+        }
+
+        .treino-config {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #f8f9fa;
+        }
+
+        .treino-titulo {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .dia-semana {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            padding: 8px;
+            background: white;
+            border-radius: 6px;
+        }
+
+        .dia-semana select {
+            padding: 6px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
         }
 
         .urgente {
@@ -357,11 +429,7 @@
                 
                 <div class="card">
                     <h3 style="margin-bottom: 15px; color: #4facfe;">🏋️ Treino</h3>
-                    <div class="empty-state">
-                        <span class="icon">💪</span>
-                        <h3>Configure seus treinos</h3>
-                        <p>Defina os exercícios para cada dia da semana</p>
-                    </div>
+                    <div id="treinoHoje"></div>
                 </div>
 
                 <div class="card">
@@ -373,9 +441,46 @@
                     </div>
                 </div>
 
-                <button class="btn" onclick="alert('Em breve: Configurar rotina!')">
-                    ⚙️ Configurar Rotina
-                </button>
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="btn" onclick="mostrarConfigTreinos()" style="flex: 1;">
+                        ⚙️ Configurar Treinos
+                    </button>
+                    <button class="btn" onclick="alert('Em breve: Configurar refeições!')" style="flex: 1; background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                        🍽️ Refeições
+                    </button>
+                </div>
+                
+                <!-- Modal de Configuração de Treinos -->
+                <div id="modalTreinos" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000;">
+                    <div style="background: white; margin: 20px; border-radius: 15px; max-height: calc(100vh - 40px); overflow-y: auto;">
+                        <div style="padding: 20px; border-bottom: 1px solid #eee;">
+                            <h2 style="color: #4facfe; margin: 0;">⚙️ Configurar Treinos</h2>
+                        </div>
+                        
+                        <div style="padding: 20px;">
+                            <!-- Configuração dos dias da semana -->
+                            <h3 style="color: #333; margin-bottom: 15px;">📅 Dias da Semana</h3>
+                            <div id="diasSemana"></div>
+                            
+                            <!-- Configuração dos treinos -->
+                            <h3 style="color: #333; margin: 20px 0 15px 0;">💪 Seus Treinos</h3>
+                            <div id="listaTreinos"></div>
+                            
+                            <button class="btn" onclick="adicionarTreino()" style="margin: 15px 0; background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                                + Adicionar Novo Treino
+                            </button>
+                            
+                            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                                <button class="btn" onclick="salvarConfigTreinos()" style="flex: 1; background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                                    ✅ Salvar
+                                </button>
+                                <button class="btn" onclick="fecharConfigTreinos()" style="flex: 1; background: linear-gradient(135deg, #6c757d 0%, #495057 100%);">
+                                    ❌ Fechar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- ABA FINANCEIRO -->
@@ -559,6 +664,215 @@
             }
         }
 
+        // FUNÇÕES DOS TREINOS
+        let treinos = JSON.parse(localStorage.getItem('treinos')) || [];
+        let diasSemanaConfig = JSON.parse(localStorage.getItem('diasSemanaConfig')) || {};
+        let historicoCargas = JSON.parse(localStorage.getItem('historicoCargas')) || {};
+
+        const diasSemana = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+
+        function mostrarConfigTreinos() {
+            document.getElementById('modalTreinos').style.display = 'block';
+            carregarConfigTreinos();
+        }
+
+        function fecharConfigTreinos() {
+            document.getElementById('modalTreinos').style.display = 'none';
+        }
+
+        function carregarConfigTreinos() {
+            // Carregar dias da semana
+            const diasDiv = document.getElementById('diasSemana');
+            diasDiv.innerHTML = diasSemana.map(dia => `
+                <div class="dia-semana">
+                    <strong style="width: 80px;">${dia.charAt(0).toUpperCase() + dia.slice(1)}:</strong>
+                    <select id="select-${dia}">
+                        <option value="">Descanso</option>
+                        ${treinos.map(treino => 
+                            `<option value="${treino.id}" ${diasSemanaConfig[dia] === treino.id ? 'selected' : ''}>
+                                ${treino.nome}
+                            </option>`
+                        ).join('')}
+                    </select>
+                </div>
+            `).join('');
+
+            // Carregar treinos
+            const treinosDiv = document.getElementById('listaTreinos');
+            if (treinos.length === 0) {
+                treinosDiv.innerHTML = '<p style="text-align: center; color: #6c757d;">Nenhum treino cadastrado ainda</p>';
+                return;
+            }
+
+            treinosDiv.innerHTML = treinos.map(treino => `
+                <div class="treino-config">
+                    <div class="treino-titulo">
+                        <h4 style="color: #4facfe; margin: 0;">${treino.nome}</h4>
+                        <button onclick="excluirTreino('${treino.id}')" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 12px;">🗑️</button>
+                    </div>
+                    <div id="exercicios-${treino.id}">
+                        ${treino.exercicios.map((ex, index) => `
+                            <div style="margin-bottom: 10px; padding: 8px; background: white; border-radius: 4px;">
+                                <input type="text" value="${ex.nome}" placeholder="Nome do exercício" 
+                                       onchange="atualizarExercicio('${treino.id}', ${index}, 'nome', this.value)"
+                                       style="width: 100%; padding: 6px; margin-bottom: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                                <div style="display: flex; gap: 10px;">
+                                    <input type="number" value="${ex.series}" placeholder="Séries" 
+                                           onchange="atualizarExercicio('${treino.id}', ${index}, 'series', this.value)"
+                                           style="width: 60px; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                                    <span style="display: flex; align-items: center;">x</span>
+                                    <input type="number" value="${ex.repeticoes}" placeholder="Reps" 
+                                           onchange="atualizarExercicio('${treino.id}', ${index}, 'repeticoes', this.value)"
+                                           style="width: 60px; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                                    <button onclick="removerExercicio('${treino.id}', ${index})" 
+                                            style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 12px;">❌</button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button onclick="adicionarExercicio('${treino.id}')" 
+                            style="background: #28a745; color: white; border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; margin-top: 8px;">
+                        + Adicionar Exercício
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function adicionarTreino() {
+            const nome = prompt('Nome do treino (ex: Treino A, Peito/Tríceps):');
+            if (!nome) return;
+
+            const novoTreino = {
+                id: Date.now().toString(),
+                nome: nome,
+                exercicios: []
+            };
+
+            treinos.push(novoTreino);
+            carregarConfigTreinos();
+        }
+
+        function excluirTreino(id) {
+            if (confirm('Tem certeza que deseja excluir este treino?')) {
+                treinos = treinos.filter(t => t.id !== id);
+                carregarConfigTreinos();
+            }
+        }
+
+        function adicionarExercicio(treinoId) {
+            const treino = treinos.find(t => t.id === treinoId);
+            if (treino) {
+                treino.exercicios.push({
+                    nome: '',
+                    series: 3,
+                    repeticoes: 10
+                });
+                carregarConfigTreinos();
+            }
+        }
+
+        function removerExercicio(treinoId, index) {
+            const treino = treinos.find(t => t.id === treinoId);
+            if (treino) {
+                treino.exercicios.splice(index, 1);
+                carregarConfigTreinos();
+            }
+        }
+
+        function atualizarExercicio(treinoId, index, campo, valor) {
+            const treino = treinos.find(t => t.id === treinoId);
+            if (treino && treino.exercicios[index]) {
+                treino.exercicios[index][campo] = valor;
+            }
+        }
+
+        function salvarConfigTreinos() {
+            // Salvar configuração dos dias
+            diasSemana.forEach(dia => {
+                const select = document.getElementById(`select-${dia}`);
+                if (select) {
+                    diasSemanaConfig[dia] = select.value;
+                }
+            });
+
+            localStorage.setItem('treinos', JSON.stringify(treinos));
+            localStorage.setItem('diasSemanaConfig', JSON.stringify(diasSemanaConfig));
+            
+            fecharConfigTreinos();
+            atualizarTreinoHoje();
+            alert('Configuração salva com sucesso!');
+        }
+
+        function atualizarTreinoHoje() {
+            const hoje = new Date().getDay(); // 0=domingo, 1=segunda...
+            const nomeDia = diasSemana[hoje];
+            const treinoId = diasSemanaConfig[nomeDia];
+            
+            const treinoDiv = document.getElementById('treinoHoje');
+            
+            if (!treinoId) {
+                treinoDiv.innerHTML = `
+                    <div class="empty-state">
+                        <span class="icon">😴</span>
+                        <h3>Hoje é dia de descanso!</h3>
+                        <p>${nomeDia.charAt(0).toUpperCase() + nomeDia.slice(1)}</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            const treino = treinos.find(t => t.id === treinoId);
+            if (!treino || treino.exercicios.length === 0) {
+                treinoDiv.innerHTML = `
+                    <div class="empty-state">
+                        <span class="icon">💪</span>
+                        <h3>Configure seus treinos</h3>
+                        <p>Adicione exercícios ao treino de ${nomeDia}</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            treinoDiv.innerHTML = `
+                <div style="margin-bottom: 15px;">
+                    <h4 style="color: #4facfe; margin: 0 0 5px 0;">${treino.nome}</h4>
+                    <p style="color: #6c757d; margin: 0; font-size: 14px;">${nomeDia.charAt(0).toUpperCase() + nomeDia.slice(1)}</p>
+                </div>
+                ${treino.exercicios.map((exercicio, index) => {
+                    const chaveHistorico = `${treinoId}-${index}`;
+                    const ultimaCarga = historicoCargas[chaveHistorico] || '';
+                    
+                    return `
+                        <div class="exercicio-item">
+                            <div class="exercicio-header">
+                                <div class="exercicio-nome">${exercicio.nome}</div>
+                            </div>
+                            <div class="exercicio-series">${exercicio.series} séries x ${exercicio.repeticoes} repetições</div>
+                            <div class="carga-input">
+                                <span style="font-size: 14px; color: #333;">Carga:</span>
+                                <input type="number" id="carga-${chaveHistorico}" placeholder="kg" step="0.5">
+                                <button onclick="salvarCarga('${chaveHistorico}')" 
+                                        style="background: #4facfe; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 12px;">✓</button>
+                            </div>
+                            ${ultimaCarga ? `<div class="carga-ultima">Última: ${ultimaCarga}kg</div>` : ''}
+                        </div>
+                    `;
+                }).join('')}
+            `;
+        }
+
+        function salvarCarga(chaveHistorico) {
+            const input = document.getElementById(`carga-${chaveHistorico}`);
+            const carga = input.value;
+            
+            if (carga) {
+                historicoCargas[chaveHistorico] = carga;
+                localStorage.setItem('historicoCargas', JSON.stringify(historicoCargas));
+                input.value = '';
+                atualizarTreinoHoje();
+            }
+        }
+
         function verificarLembretesUrgentes() {
             const agora = new Date();
             const hoje = agora.toISOString().split('T')[0];
@@ -625,6 +939,7 @@
             updateDate();
             atualizarListaLembretes();
             verificarLembretesUrgentes();
+            atualizarTreinoHoje();
             
             // Solicitar permissão para notificações
             if ('Notification' in window && Notification.permission === 'default') {
