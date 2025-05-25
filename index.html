@@ -302,6 +302,48 @@
             border-radius: 4px;
         }
 
+        .resumo-macros {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .resumo-macro {
+            text-align: center;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+
+        .resumo-macro .valor {
+            font-size: 18px;
+            display: block;
+            margin-bottom: 2px;
+        }
+
+        .resumo-macro .label {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .resumo-calorias {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+            color: white;
+            text-align: center;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+
+        .resumo-insulina {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            text-align: center;
+            padding: 8px;
+            border-radius: 8px;
+        }
+
         .sub-tab {
             flex: 1;
             padding: 12px;
@@ -552,13 +594,19 @@
                 <div class="section-title">Rotina de Hoje</div>
                 
                 <!-- Abas dentro da Rotina -->
-                <div style="display: flex; background: #f8f9fa; border-radius: 10px; padding: 4px; margin-bottom: 20px;">
+                <div style="display: flex; background: #f8f9fa; border-radius: 10px; padding: 4px; margin-bottom: 15px;">
                     <button id="btnTreino" class="sub-tab active" onclick="mostrarSubAba('treino')">
                         💪 Treino
                     </button>
                     <button id="btnRefeicoes" class="sub-tab" onclick="mostrarSubAba('refeicoes')">
                         🍽️ Refeições
                     </button>
+                </div>
+                
+                <!-- Resumo Nutricional -->
+                <div id="resumoNutricional" class="card" style="margin-bottom: 20px; display: none;">
+                    <h4 style="color: #28a745; margin: 0 0 15px 0; text-align: center;">📊 Resumo Nutricional do Dia</h4>
+                    <div id="conteudoResumo"></div>
                 </div>
                 
                 <!-- Conteúdo do Treino -->
@@ -1035,6 +1083,60 @@
             }
         }
 
+        function atualizarResumoNutricional() {
+            const resumoDiv = document.getElementById('resumoNutricional');
+            const conteudoDiv = document.getElementById('conteudoResumo');
+            
+            if (refeicoes.length === 0) {
+                resumoDiv.style.display = 'none';
+                return;
+            }
+            
+            // Calcular totais
+            let totalCalorias = 0;
+            let totalCarboidratos = 0;
+            let totalProteinas = 0;
+            let totalGorduras = 0;
+            let totalInsulina = 0;
+            
+            refeicoes.forEach(refeicao => {
+                totalCalorias += Number(refeicao.calorias) || 0;
+                totalCarboidratos += Number(refeicao.carboidratos) || 0;
+                totalProteinas += Number(refeicao.proteinas) || 0;
+                totalGorduras += Number(refeicao.gorduras) || 0;
+                totalInsulina += calcularInsulina(refeicao.carboidratos, refeicao.insulinaPorCarb || 10);
+            });
+            
+            conteudoDiv.innerHTML = `
+                <div class="resumo-calorias">
+                    <div style="font-size: 20px; font-weight: bold;">🔥 ${totalCalorias} kcal</div>
+                    <div style="font-size: 12px; opacity: 0.9;">Total do dia</div>
+                </div>
+                
+                <div class="resumo-macros">
+                    <div class="resumo-macro carbs">
+                        <span class="valor">${totalCarboidratos}g</span>
+                        <span class="label">Carboidratos</span>
+                    </div>
+                    <div class="resumo-macro protein">
+                        <span class="valor">${totalProteinas}g</span>
+                        <span class="label">Proteínas</span>
+                    </div>
+                    <div class="resumo-macro fat">
+                        <span class="valor">${totalGorduras}g</span>
+                        <span class="label">Gorduras</span>
+                    </div>
+                </div>
+                
+                <div class="resumo-insulina">
+                    <div style="font-size: 16px; font-weight: bold;">💉 ${totalInsulina} unidade${totalInsulina !== 1 ? 's' : ''} de insulina</div>
+                    <div style="font-size: 11px; opacity: 0.9;">Total do dia</div>
+                </div>
+            `;
+            
+            resumoDiv.style.display = 'block';
+        }
+
         function mostrarSubAba(aba) {
             // Remover classe active de todas as sub-abas
             document.querySelectorAll('.sub-tab').forEach(tab => tab.classList.remove('active'));
@@ -1043,6 +1145,14 @@
             // Adicionar classe active na aba selecionada
             document.getElementById('btn' + aba.charAt(0).toUpperCase() + aba.slice(1)).classList.add('active');
             document.getElementById('sub' + aba.charAt(0).toUpperCase() + aba.slice(1)).classList.add('active');
+            
+            // Mostrar/ocultar resumo nutricional apenas na aba de refeições
+            const resumoDiv = document.getElementById('resumoNutricional');
+            if (aba === 'refeicoes') {
+                atualizarResumoNutricional();
+            } else {
+                resumoDiv.style.display = 'none';
+            }
         }
 
         function mostrarConfigRefeicoes() {
@@ -1157,6 +1267,7 @@
             localStorage.setItem('refeicoes', JSON.stringify(refeicoes));
             fecharConfigRefeicoes();
             atualizarRefeicoesHoje();
+            atualizarResumoNutricional();
             alert('Refeições salvas com sucesso!');
         }
 
@@ -1228,6 +1339,12 @@
                     </div>
                 `;
             }).join('');
+            
+            // Atualizar resumo se estivermos na aba de refeições
+            const btnRefeicoes = document.getElementById('btnRefeicoes');
+            if (btnRefeicoes && btnRefeicoes.classList.contains('active')) {
+                atualizarResumoNutricional();
+            }
         }
 
         function salvarCarga(chaveHistorico) {
