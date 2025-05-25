@@ -302,6 +302,32 @@
             border-radius: 4px;
         }
 
+        .sub-tab {
+            flex: 1;
+            padding: 12px;
+            background: none;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            color: #6c757d;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .sub-tab.active {
+            background: white;
+            color: #4facfe;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .sub-content {
+            display: none;
+        }
+
+        .sub-content.active {
+            display: block;
+        }
+
         .refeicao-item {
             background: white;
             border-radius: 12px;
@@ -525,22 +551,33 @@
             <div id="rotina" class="tab-content">
                 <div class="section-title">Rotina de Hoje</div>
                 
-                <div class="card">
-                    <h3 style="margin-bottom: 15px; color: #4facfe;">🏋️ Treino</h3>
-                    <div id="treinoHoje"></div>
+                <!-- Abas dentro da Rotina -->
+                <div style="display: flex; background: #f8f9fa; border-radius: 10px; padding: 4px; margin-bottom: 20px;">
+                    <button id="btnTreino" class="sub-tab active" onclick="mostrarSubAba('treino')">
+                        💪 Treino
+                    </button>
+                    <button id="btnRefeicoes" class="sub-tab" onclick="mostrarSubAba('refeicoes')">
+                        🍽️ Refeições
+                    </button>
                 </div>
-
-                <div class="card">
-                    <h3 style="margin-bottom: 15px; color: #4facfe;">🍽️ Refeições</h3>
-                    <div id="refeicoesHoje"></div>
-                </div>
-
-                <div style="display: flex; gap: 10px; margin-top: 15px;">
-                    <button class="btn" onclick="mostrarConfigTreinos()" style="flex: 1;">
+                
+                <!-- Conteúdo do Treino -->
+                <div id="subTreino" class="sub-content active">
+                    <div class="card">
+                        <div id="treinoHoje"></div>
+                    </div>
+                    <button class="btn" onclick="mostrarConfigTreinos()">
                         ⚙️ Configurar Treinos
                     </button>
-                    <button class="btn" onclick="mostrarConfigRefeicoes()" style="flex: 1; background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-                        🍽️ Refeições
+                </div>
+                
+                <!-- Conteúdo das Refeições -->
+                <div id="subRefeicoes" class="sub-content">
+                    <div class="card">
+                        <div id="refeicoesHoje"></div>
+                    </div>
+                    <button class="btn" onclick="mostrarConfigRefeicoes()" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                        ⚙️ Configurar Refeições
                     </button>
                 </div>
                 
@@ -986,6 +1023,28 @@
         // FUNÇÕES DAS REFEIÇÕES
         let refeicoes = JSON.parse(localStorage.getItem('refeicoes')) || [];
 
+        function calcularInsulina(carboidratos, insulinaPorCarb) {
+            if (!carboidratos || !insulinaPorCarb) return 0;
+            const resultado = carboidratos / insulinaPorCarb;
+            const decimal = resultado % 1;
+            
+            if (decimal >= 0.5) {
+                return Math.ceil(resultado);
+            } else {
+                return Math.floor(resultado);
+            }
+        }
+
+        function mostrarSubAba(aba) {
+            // Remover classe active de todas as sub-abas
+            document.querySelectorAll('.sub-tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.sub-content').forEach(content => content.classList.remove('active'));
+            
+            // Adicionar classe active na aba selecionada
+            document.getElementById('btn' + aba.charAt(0).toUpperCase() + aba.slice(1)).classList.add('active');
+            document.getElementById('sub' + aba.charAt(0).toUpperCase() + aba.slice(1)).classList.add('active');
+        }
+
         function mostrarConfigRefeicoes() {
             document.getElementById('modalRefeicoes').style.display = 'block';
             carregarConfigRefeicoes();
@@ -1027,27 +1086,33 @@
                     
                     <div class="macros-grid">
                         <div class="input-grupo">
-                            <label>Carboidratos (g):</label>
+                            <label>Carboidratos:</label>
                             <input type="number" value="${refeicao.carboidratos}" onchange="atualizarRefeicao('${refeicao.id}', 'carboidratos', this.value)" step="0.1">
                         </div>
                         <div class="input-grupo">
-                            <label>Proteínas (g):</label>
+                            <label>Proteínas:</label>
                             <input type="number" value="${refeicao.proteinas}" onchange="atualizarRefeicao('${refeicao.id}', 'proteinas', this.value)" step="0.1">
                         </div>
                         <div class="input-grupo">
-                            <label>Gorduras (g):</label>
+                            <label>Gorduras:</label>
                             <input type="number" value="${refeicao.gorduras}" onchange="atualizarRefeicao('${refeicao.id}', 'gorduras', this.value)" step="0.1">
                         </div>
                     </div>
                     
-                    <div class="input-grupo">
-                        <label>Calorias:</label>
-                        <input type="number" value="${refeicao.calorias}" onchange="atualizarRefeicao('${refeicao.id}', 'calorias', this.value)">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div class="input-grupo">
+                            <label>Calorias:</label>
+                            <input type="number" value="${refeicao.calorias}" onchange="atualizarRefeicao('${refeicao.id}', 'calorias', this.value)">
+                        </div>
+                        <div class="input-grupo">
+                            <label>Insulina por Carboidrato:</label>
+                            <input type="number" value="${refeicao.insulinaPorCarb || 10}" onchange="atualizarRefeicao('${refeicao.id}', 'insulinaPorCarb', this.value)" step="0.1" min="0.1">
+                        </div>
                     </div>
                     
                     <div style="background: #e3f2fd; padding: 8px; border-radius: 4px; margin-top: 10px; text-align: center;">
-                        <strong style="color: #1976d2;">Insulina: ${Math.ceil(refeicao.carboidratos / 10)} unidade${Math.ceil(refeicao.carboidratos / 10) !== 1 ? 's' : ''}</strong>
-                        <br><small style="color: #666;">1 unidade para cada 10g de carboidrato</small>
+                        <strong style="color: #1976d2;">Insulina: ${calcularInsulina(refeicao.carboidratos, refeicao.insulinaPorCarb || 10)} unidade${calcularInsulina(refeicao.carboidratos, refeicao.insulinaPorCarb || 10) !== 1 ? 's' : ''}</strong>
+                        <br><small style="color: #666;">1 unidade para cada ${refeicao.insulinaPorCarb || 10}g de carboidrato</small>
                     </div>
                 </div>
             `).join('');
@@ -1062,7 +1127,8 @@
                 carboidratos: 0,
                 proteinas: 0,
                 gorduras: 0,
-                calorias: 0
+                calorias: 0,
+                insulinaPorCarb: 10
             };
 
             refeicoes.push(novaRefeicao);
@@ -1081,7 +1147,7 @@
             if (refeicao) {
                 refeicao[campo] = valor;
                 // Recarregar para atualizar o cálculo de insulina
-                if (campo === 'carboidratos') {
+                if (campo === 'carboidratos' || campo === 'insulinaPorCarb') {
                     carregarConfigRefeicoes();
                 }
             }
@@ -1119,7 +1185,7 @@
             refeicoesDiv.innerHTML = refeicoesOrdenadas.map(refeicao => {
                 const [hora, minuto] = refeicao.horario.split(':').map(Number);
                 const horarioRefeicao = hora * 60 + minuto;
-                const insulina = Math.ceil(refeicao.carboidratos / 10);
+                const insulina = calcularInsulina(refeicao.carboidratos, refeicao.insulinaPorCarb || 10);
                 
                 // Determinar se é próxima refeição (próxima 30 min)
                 const isProxima = horarioRefeicao > horaAtual && horarioRefeicao <= horaAtual + 30;
