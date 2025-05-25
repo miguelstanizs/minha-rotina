@@ -149,6 +149,73 @@
             display: block;
         }
 
+        .lembrete-item {
+            background: white;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 10px;
+            border: 1px solid #e9ecef;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .lembrete-item.concluido {
+            opacity: 0.6;
+            text-decoration: line-through;
+        }
+
+        .lembrete-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .lembrete-titulo {
+            font-weight: 600;
+            color: #333;
+            flex: 1;
+        }
+
+        .lembrete-status {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-pequeno {
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: 15px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .btn-concluir {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-excluir {
+            background: #dc3545;
+            color: white;
+        }
+
+        .lembrete-info {
+            font-size: 14px;
+            color: #6c757d;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .urgente {
+            border-left: 4px solid #dc3545;
+        }
+
+        .hoje {
+            border-left: 4px solid #ffc107;
+        }
+
         /* Responsividade para iPhone */
         @media (max-width: 380px) {
             .container {
@@ -214,13 +281,49 @@
             <div id="lembretes" class="tab-content active">
                 <div class="section-title">Meus Lembretes</div>
                 
-                <div class="empty-state">
+                <!-- Formulário para adicionar lembrete -->
+                <div class="card" id="formLembrete" style="display: none;">
+                    <h3 style="margin-bottom: 15px; color: #4facfe;">➕ Novo Lembrete</h3>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; color: #333; font-weight: 600;">Tarefa:</label>
+                        <input type="text" id="tarefaInput" placeholder="Ex: Consulta médica" 
+                               style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px;">
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; color: #333; font-weight: 600;">Data:</label>
+                        <input type="date" id="dataInput" 
+                               style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px;">
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 5px; color: #333; font-weight: 600;">Horário:</label>
+                        <input type="time" id="horarioInput" 
+                               style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px;">
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn" onclick="salvarLembrete()" style="flex: 1; background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                            ✅ Salvar
+                        </button>
+                        <button class="btn" onclick="cancelarLembrete()" style="flex: 1; background: linear-gradient(135deg, #6c757d 0%, #495057 100%);">
+                            ❌ Cancelar
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Lista de lembretes -->
+                <div id="listaLembretes"></div>
+                
+                <!-- Estado vazio -->
+                <div class="empty-state" id="emptyState">
                     <span class="icon">📝</span>
                     <h3>Nenhum lembrete ainda</h3>
                     <p>Adicione suas tarefas e organize seu dia!</p>
                 </div>
 
-                <button class="btn" onclick="alert('Em breve: Adicionar lembretes!')">
+                <button class="btn" onclick="mostrarFormLembrete()">
                     + Adicionar Lembrete
                 </button>
             </div>
@@ -300,13 +403,174 @@
             document.getElementById(tabName).classList.add('active');
         }
 
+        // FUNÇÕES DOS LEMBRETES
+        let lembretes = JSON.parse(localStorage.getItem('lembretes')) || [];
+
+        function mostrarFormLembrete() {
+            document.getElementById('formLembrete').style.display = 'block';
+            document.getElementById('emptyState').style.display = 'none';
+            
+            // Definir data padrão como hoje
+            const hoje = new Date().toISOString().split('T')[0];
+            document.getElementById('dataInput').value = hoje;
+        }
+
+        function cancelarLembrete() {
+            document.getElementById('formLembrete').style.display = 'none';
+            document.getElementById('tarefaInput').value = '';
+            document.getElementById('dataInput').value = '';
+            document.getElementById('horarioInput').value = '';
+            atualizarListaLembretes();
+        }
+
+        function salvarLembrete() {
+            const tarefa = document.getElementById('tarefaInput').value.trim();
+            const data = document.getElementById('dataInput').value;
+            const horario = document.getElementById('horarioInput').value;
+            
+            if (!tarefa) {
+                alert('Por favor, digite a tarefa!');
+                return;
+            }
+            
+            if (!data) {
+                alert('Por favor, selecione a data!');
+                return;
+            }
+            
+            if (!horario) {
+                alert('Por favor, selecione o horário!');
+                return;
+            }
+            
+            const novoLembrete = {
+                id: Date.now(),
+                tarefa: tarefa,
+                data: data,
+                horario: horario,
+                concluido: false,
+                criado: new Date().toISOString()
+            };
+            
+            lembretes.push(novoLembrete);
+            localStorage.setItem('lembretes', JSON.stringify(lembretes));
+            
+            // Agendar notificação
+            agendarNotificacao(novoLembrete);
+            
+            cancelarLembrete();
+            atualizarListaLembretes();
+        }
+
+        function atualizarListaLembretes() {
+            const lista = document.getElementById('listaLembretes');
+            const emptyState = document.getElementById('emptyState');
+            
+            if (lembretes.length === 0) {
+                lista.innerHTML = '';
+                emptyState.style.display = 'block';
+                return;
+            }
+            
+            emptyState.style.display = 'none';
+            
+            // Ordenar por data e horário
+            const lembretesOrdenados = lembretes.sort((a, b) => {
+                const dataA = new Date(a.data + ' ' + a.horario);
+                const dataB = new Date(b.data + ' ' + b.horario);
+                return dataA - dataB;
+            });
+            
+            lista.innerHTML = lembretesOrdenados.map(lembrete => {
+                const dataLembrete = new Date(lembrete.data + ' ' + lembrete.horario);
+                const hoje = new Date();
+                const amanha = new Date(hoje);
+                amanha.setDate(hoje.getDate() + 1);
+                
+                let classeUrgencia = '';
+                if (dataLembrete < hoje && !lembrete.concluido) {
+                    classeUrgencia = 'urgente';
+                } else if (lembrete.data === hoje.toISOString().split('T')[0]) {
+                    classeUrgencia = 'hoje';
+                }
+                
+                const dataFormatada = new Date(lembrete.data).toLocaleDateString('pt-BR');
+                
+                return `
+                    <div class="lembrete-item ${classeUrgencia} ${lembrete.concluido ? 'concluido' : ''}">
+                        <div class="lembrete-header">
+                            <div class="lembrete-titulo">${lembrete.tarefa}</div>
+                            <div class="lembrete-status">
+                                ${!lembrete.concluido ? 
+                                    `<button class="btn-pequeno btn-concluir" onclick="concluirLembrete(${lembrete.id})">✓</button>` : 
+                                    ''
+                                }
+                                <button class="btn-pequeno btn-excluir" onclick="excluirLembrete(${lembrete.id})">🗑️</button>
+                            </div>
+                        </div>
+                        <div class="lembrete-info">
+                            <span>📅 ${dataFormatada}</span>
+                            <span>⏰ ${lembrete.horario}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function concluirLembrete(id) {
+            lembretes = lembretes.map(lembrete => 
+                lembrete.id === id ? {...lembrete, concluido: true} : lembrete
+            );
+            localStorage.setItem('lembretes', JSON.stringify(lembretes));
+            atualizarListaLembretes();
+        }
+
+        function excluirLembrete(id) {
+            if (confirm('Tem certeza que deseja excluir este lembrete?')) {
+                lembretes = lembretes.filter(lembrete => lembrete.id !== id);
+                localStorage.setItem('lembretes', JSON.stringify(lembretes));
+                atualizarListaLembretes();
+            }
+        }
+
+        function agendarNotificacao(lembrete) {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                const dataNotificacao = new Date(lembrete.data + ' ' + lembrete.horario);
+                const agora = new Date();
+                const tempoAteNotificacao = dataNotificacao.getTime() - agora.getTime();
+                
+                if (tempoAteNotificacao > 0) {
+                    setTimeout(() => {
+                        new Notification('🔔 Lembrete!', {
+                            body: lembrete.tarefa,
+                            icon: '/favicon.ico',
+                            tag: 'lembrete-' + lembrete.id
+                        });
+                        
+                        // Tocar som (se possível)
+                        try {
+                            const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBS2SvOrRhTMGJHfJ7N2QQAkQa7jp6qNSEwlBn+Lxs2IaCDCdxOnXgTIGKYHL8t2PQQkRbbrr5qJTFAhCpODws2ERAyF+werpg30qDx2SuFq7gmMJATuFuMK2lWI=[...]');
+                            audio.play();
+                        } catch(e) {
+                            console.log('Som não pôde ser reproduzido');
+                        }
+                    }, tempoAteNotificacao);
+                }
+            }
+        }
+
         // Inicializar app
         document.addEventListener('DOMContentLoaded', function() {
             updateDate();
+            atualizarListaLembretes();
             
             // Solicitar permissão para notificações
             if ('Notification' in window && Notification.permission === 'default') {
-                Notification.requestPermission();
+                Notification.requestPermission().then(permission => {
+                    if (permission === 'granted') {
+                        console.log('Notificações permitidas!');
+                    }
+                });
             }
         });
 
