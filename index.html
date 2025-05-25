@@ -1105,7 +1105,7 @@
                             <input type="number" value="${refeicao.calorias}" onchange="atualizarRefeicao('${refeicao.id}', 'calorias', this.value)">
                         </div>
                         <div class="input-grupo">
-                            <label>Insulina por Carboidrato:</label>
+                            <label>Carboidratos por UI:</label>
                             <input type="number" value="${refeicao.insulinaPorCarb || 10}" onchange="atualizarRefeicao('${refeicao.id}', 'insulinaPorCarb', this.value)" step="0.1" min="0.1">
                         </div>
                     </div>
@@ -1202,7 +1202,7 @@
                             <div class="refeicao-horario">${refeicao.horario}</div>
                         </div>
                         
-                        <div style="font-size: 12px; color: #666; margin-bottom: 8px;">
+                        <div style="font-size: 12px; color: #666; margin-bottom: 8px; white-space: pre-line;">
                             ${refeicao.alimentos}
                         </div>
                         
