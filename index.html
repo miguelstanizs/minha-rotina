@@ -366,6 +366,99 @@
             display: none;
         }
 
+        .saldo-positivo {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            text-align: center;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+        }
+
+        .saldo-negativo {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            color: white;
+            text-align: center;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+        }
+
+        .saldo-valor {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .saldo-label {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .resumo-financeiro {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+            margin-top: 15px;
+        }
+
+        .item-resumo {
+            text-align: center;
+            padding: 8px;
+            border-radius: 6px;
+            background: #f8f9fa;
+            font-size: 12px;
+        }
+
+        .item-resumo .valor {
+            font-weight: bold;
+            font-size: 14px;
+            display: block;
+            margin-bottom: 2px;
+        }
+
+        .gasto-item {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+            border-left: 4px solid #dc3545;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .gasto-info {
+            flex: 1;
+        }
+
+        .gasto-descricao {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 2px;
+        }
+
+        .gasto-data {
+            font-size: 12px;
+            color: #6c757d;
+        }
+
+        .gasto-valor {
+            font-weight: bold;
+            color: #dc3545;
+            margin-right: 10px;
+        }
+
+        .btn-excluir-gasto {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
         .sub-content.active {
             display: block;
         }
@@ -693,18 +786,86 @@
             <div id="financeiro" class="tab-content">
                 <div class="section-title">Controle Financeiro</div>
                 
-                <div class="card">
-                    <h3 style="margin-bottom: 15px; color: #4facfe;">💵 Resumo do Mês</h3>
-                    <div class="empty-state">
-                        <span class="icon">📊</span>
-                        <h3>Configure suas finanças</h3>
-                        <p>Defina salário, custos fixos e metas</p>
+                <!-- Resumo do Mês -->
+                <div class="card" id="resumoFinanceiro">
+                    <h3 style="margin-bottom: 15px; color: #4facfe; text-align: center;">💰 Resumo do Mês</h3>
+                    <div id="saldoDisponivel"></div>
+                </div>
+                
+                <!-- Configuração Base -->
+                <div class="card" id="configFinanceira" style="display: none;">
+                    <h4 style="color: #28a745; margin: 0 0 15px 0;">⚙️ Configuração Financeira</h4>
+                    
+                    <div class="input-grupo">
+                        <label>💵 Salário Mensal:</label>
+                        <input type="number" id="salarioInput" placeholder="Ex: 5000" step="0.01">
+                    </div>
+                    
+                    <div class="input-grupo">
+                        <label>🏠 Gastos Fixos Mensais:</label>
+                        <input type="number" id="gastosFixosInput" placeholder="Ex: 2500" step="0.01">
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px; margin-top: 15px;">
+                        <button class="btn" onclick="salvarConfigFinanceira()" style="flex: 1; background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                            ✅ Salvar
+                        </button>
+                        <button class="btn" onclick="cancelarConfigFinanceira()" style="flex: 1; background: linear-gradient(135deg, #6c757d 0%, #495057 100%);">
+                            ❌ Cancelar
+                        </button>
                     </div>
                 </div>
-
-                <button class="btn" onclick="alert('Em breve: Configurar finanças!')">
-                    ⚙️ Configurar Finanças
+                
+                <!-- Lançamentos do Mês -->
+                <div class="card">
+                    <h4 style="color: #dc3545; margin: 0 0 15px 0;">📝 Gastos do Mês</h4>
+                    <div id="listaGastos"></div>
+                </div>
+                
+                <!-- Botões de Ação -->
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="btn" onclick="mostrarFormGasto()" style="flex: 1; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);">
+                        ➕ Adicionar Gasto
+                    </button>
+                    <button class="btn" onclick="mostrarConfigFinanceira()" style="flex: 1; background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%); color: #333;">
+                        ⚙️ Configurar
+                    </button>
+                </div>
+                
+                <button class="btn" onclick="resetarMes()" style="width: 100%; margin-top: 10px; background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);">
+                    🔄 Resetar Mês
                 </button>
+                
+                <!-- Modal para Adicionar Gasto -->
+                <div id="modalGasto" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000;">
+                    <div style="background: white; margin: 50px 20px; border-radius: 15px; padding: 20px;">
+                        <h3 style="color: #dc3545; margin: 0 0 20px 0; text-align: center;">➕ Adicionar Gasto</h3>
+                        
+                        <div class="input-grupo">
+                            <label>📄 Descrição:</label>
+                            <input type="text" id="descricaoGasto" placeholder="Ex: Supermercado, Gasolina">
+                        </div>
+                        
+                        <div class="input-grupo">
+                            <label>💸 Valor:</label>
+                            <input type="number" id="valorGasto" placeholder="Ex: 150.00" step="0.01">
+                        </div>
+                        
+                        <div class="input-grupo">
+                            <label>📅 Data:</label>
+                            <input type="date" id="dataGasto">
+                        </div>
+                        
+                        <div style="display: flex; gap: 10px; margin-top: 20px;">
+                            <button class="btn" onclick="salvarGasto()" style="flex: 1; background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                                ✅ Salvar
+                            </button>
+                            <button class="btn" onclick="fecharFormGasto()" style="flex: 1; background: linear-gradient(135deg, #6c757d 0%, #495057 100%);">
+                                ❌ Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -1347,6 +1508,186 @@
             }
         }
 
+        // FUNÇÕES FINANCEIRAS
+        let configFinanceira = JSON.parse(localStorage.getItem('configFinanceira')) || { salario: 0, gastosFixos: 0 };
+        let gastosVariaveis = JSON.parse(localStorage.getItem('gastosVariaveis')) || [];
+        let mesAtual = new Date().getMonth() + '-' + new Date().getFullYear();
+
+        function mostrarConfigFinanceira() {
+            document.getElementById('configFinanceira').style.display = 'block';
+            document.getElementById('salarioInput').value = configFinanceira.salario || '';
+            document.getElementById('gastosFixosInput').value = configFinanceira.gastosFixos || '';
+        }
+
+        function cancelarConfigFinanceira() {
+            document.getElementById('configFinanceira').style.display = 'none';
+        }
+
+        function salvarConfigFinanceira() {
+            const salario = parseFloat(document.getElementById('salarioInput').value) || 0;
+            const gastosFixos = parseFloat(document.getElementById('gastosFixosInput').value) || 0;
+            
+            configFinanceira = { salario, gastosFixos };
+            localStorage.setItem('configFinanceira', JSON.stringify(configFinanceira));
+            
+            cancelarConfigFinanceira();
+            atualizarResumoFinanceiro();
+            alert('Configuração financeira salva!');
+        }
+
+        function mostrarFormGasto() {
+            document.getElementById('modalGasto').style.display = 'block';
+            document.getElementById('dataGasto').value = new Date().toISOString().split('T')[0];
+        }
+
+        function fecharFormGasto() {
+            document.getElementById('modalGasto').style.display = 'none';
+            document.getElementById('descricaoGasto').value = '';
+            document.getElementById('valorGasto').value = '';
+            document.getElementById('dataGasto').value = '';
+        }
+
+        function salvarGasto() {
+            const descricao = document.getElementById('descricaoGasto').value.trim();
+            const valor = parseFloat(document.getElementById('valorGasto').value);
+            const data = document.getElementById('dataGasto').value;
+            
+            if (!descricao) {
+                alert('Por favor, digite a descrição do gasto!');
+                return;
+            }
+            
+            if (!valor || valor <= 0) {
+                alert('Por favor, digite um valor válido!');
+                return;
+            }
+            
+            if (!data) {
+                alert('Por favor, selecione a data!');
+                return;
+            }
+            
+            const novoGasto = {
+                id: Date.now(),
+                descricao,
+                valor,
+                data,
+                mes: mesAtual
+            };
+            
+            gastosVariaveis.push(novoGasto);
+            localStorage.setItem('gastosVariaveis', JSON.stringify(gastosVariaveis));
+            
+            fecharFormGasto();
+            atualizarListaGastos();
+            atualizarResumoFinanceiro();
+        }
+
+        function excluirGasto(id) {
+            if (confirm('Tem certeza que deseja excluir este gasto?')) {
+                gastosVariaveis = gastosVariaveis.filter(g => g.id !== id);
+                localStorage.setItem('gastosVariaveis', JSON.stringify(gastosVariaveis));
+                atualizarListaGastos();
+                atualizarResumoFinanceiro();
+            }
+        }
+
+        function resetarMes() {
+            if (confirm('Tem certeza que deseja resetar o mês? Todos os gastos variáveis serão apagados!')) {
+                // Remover apenas gastos do mês atual
+                gastosVariaveis = gastosVariaveis.filter(g => g.mes !== mesAtual);
+                localStorage.setItem('gastosVariaveis', JSON.stringify(gastosVariaveis));
+                
+                atualizarListaGastos();
+                atualizarResumoFinanceiro();
+                alert('Mês resetado com sucesso!');
+            }
+        }
+
+        function atualizarResumoFinanceiro() {
+            const saldoDiv = document.getElementById('saldoDisponivel');
+            
+            // Calcular totais
+            const salario = configFinanceira.salario || 0;
+            const gastosFixos = configFinanceira.gastosFixos || 0;
+            const gastosDoMes = gastosVariaveis
+                .filter(g => g.mes === mesAtual)
+                .reduce((total, gasto) => total + gasto.valor, 0);
+            
+            const saldoDisponivel = salario - gastosFixos - gastosDoMes;
+            const isPositivo = saldoDisponivel >= 0;
+            
+            if (salario === 0) {
+                saldoDiv.innerHTML = `
+                    <div class="empty-state">
+                        <span class="icon">⚙️</span>
+                        <h3>Configure suas finanças</h3>
+                        <p>Defina seu salário e gastos fixos para começar</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            saldoDiv.innerHTML = `
+                <div class="${isPositivo ? 'saldo-positivo' : 'saldo-negativo'}">
+                    <div class="saldo-valor">
+                        ${saldoDisponivel >= 0 ? '+' : ''}R$ ${saldoDisponivel.toFixed(2).replace('.', ',')}
+                    </div>
+                    <div class="saldo-label">
+                        ${isPositivo ? 'Disponível para gastar' : 'Acima do orçamento'}
+                    </div>
+                </div>
+                
+                <div class="resumo-financeiro">
+                    <div class="item-resumo">
+                        <span class="valor" style="color: #28a745;">R$ ${salario.toFixed(2).replace('.', ',')}</span>
+                        <div>Salário</div>
+                    </div>
+                    <div class="item-resumo">
+                        <span class="valor" style="color: #ffc107;">R$ ${gastosFixos.toFixed(2).replace('.', ',')}</span>
+                        <div>Gastos Fixos</div>
+                    </div>
+                    <div class="item-resumo">
+                        <span class="valor" style="color: #dc3545;">R$ ${gastosDoMes.toFixed(2).replace('.', ',')}</span>
+                        <div>Gastos do Mês</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function atualizarListaGastos() {
+            const listaDiv = document.getElementById('listaGastos');
+            const gastosDoMes = gastosVariaveis.filter(g => g.mes === mesAtual);
+            
+            if (gastosDoMes.length === 0) {
+                listaDiv.innerHTML = `
+                    <div style="text-align: center; color: #6c757d; padding: 20px;">
+                        <span style="font-size: 24px; display: block; margin-bottom: 10px;">📝</span>
+                        <p>Nenhum gasto registrado este mês</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Ordenar por data (mais recentes primeiro)
+            const gastosOrdenados = gastosDoMes.sort((a, b) => new Date(b.data) - new Date(a.data));
+            
+            listaDiv.innerHTML = gastosOrdenados.map(gasto => {
+                const dataFormatada = new Date(gasto.data).toLocaleDateString('pt-BR');
+                
+                return `
+                    <div class="gasto-item">
+                        <div class="gasto-info">
+                            <div class="gasto-descricao">${gasto.descricao}</div>
+                            <div class="gasto-data">${dataFormatada}</div>
+                        </div>
+                        <div class="gasto-valor">R$ ${gasto.valor.toFixed(2).replace('.', ',')}</div>
+                        <button class="btn-excluir-gasto" onclick="excluirGasto(${gasto.id})">🗑️</button>
+                    </div>
+                `;
+            }).join('');
+        }
+
         function salvarCarga(chaveHistorico) {
             const input = document.getElementById(`carga-${chaveHistorico}`);
             const carga = input.value;
@@ -1427,6 +1768,8 @@
             verificarLembretesUrgentes();
             atualizarTreinoHoje();
             atualizarRefeicoesHoje();
+            atualizarResumoFinanceiro();
+            atualizarListaGastos();
             
             // Solicitar permissão para notificações
             if ('Notification' in window && Notification.permission === 'default') {
