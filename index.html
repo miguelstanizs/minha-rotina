@@ -1,2000 +1,518 @@
-<!-- Gastos Fixos -->
-                <div class="card">
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                        <div class="input-grupo">
-                            <label>Calorias:</label>
-                            <input type="number" value="${refeicao.calorias}" onchange="atualizarRefeicao('${refeicao.id}', 'calorias', this.value)">
-                        </div>
-                        <div class="input-grupo">
-                            <label>Carboidratos por UI:</label>
-                            <input type="number" value="${refeicao.insulinaPorCarb || 10}" onchange="atualizarRefeicao('${refeicao.id}', 'insulinaPorCarb', this.value)" step="0.1" min="0.1">
-                        </div>
-                    </div>
-                    
-                    <div style="background: #e3f2fd; padding: 8px; border-radius: 4px; margin-top: 10px; text-align: center;">
-                        <strong style="color: #1976d2;">Insulina: ${calcularInsulina(refeicao.carboidratos, refeicao.insulinaPorCarb || 10)} unidade${calcularInsulina(refeicao.carboidratos, refeicao.insulinaPorCarb || 10) !== 1 ? 's' : ''}</strong>
-                        <br><small style="color: #666;">1 unidade para cada ${refeicao.insulinaPorCarb || 10}g de carboidrato</small>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function adicionarRefeicao() {
-            const novaRefeicao = {
-                id: Date.now().toString(),
-                nome: '',
-                horario: '08:00',
-                alimentos: '',
-                carboidratos: 0,
-                proteinas: 0,
-                gorduras: 0,
-                calorias: 0,
-                insulinaPorCarb: 10
-            };
-
-            refeicoes.push(novaRefeicao);
-            carregarConfigRefeicoes();
-        }
-
-        function excluirRefeicao(id) {
-            if (confirm('Tem certeza que deseja excluir esta refeição?')) {
-                refeicoes = refeicoes.filter(r => r.id !== id);
-                carregarConfigRefeicoes();
-            }
-        }
-
-        function atualizarRefeicao(id, campo, valor) {
-            const refeicao = refeicoes.find(r => r.id === id);
-            if (refeicao) {
-                refeicao[campo] = valor;
-                // Recarregar para atualizar o cálculo de insulina
-                if (campo === 'carboidratos' || campo === 'insulinaPorCarb') {
-                    carregarConfigRefeicoes();
-                }
-            }
-        }
-
-        function salvarConfigRefeicoes() {
-            localStorage.setItem('refeicoes', JSON.stringify(refeicoes));
-            fecharConfigRefeicoes();
-            atualizarRefeicoesHoje();
-            atualizarResumoNutricional();
-            alert('Refeições salvas com sucesso!');
-        }
-
-        function atualizarRefeicoesHoje() {
-            const refeicoesDiv = document.getElementById('refeicoesHoje');
-            
-            if (refeicoes.length === 0) {
-                refeicoesDiv.innerHTML = `
-                    <div class="empty-state">
-                        <span class="icon">🥗</span>
-                        <h3>Configure suas refeições</h3>
-                        <p>Defina seus horários e cardápio diário</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            // Ordenar por horário
-            const refeicoesOrdenadas = refeicoes.sort((a, b) => {
-                return a.horario.localeCompare(b.horario);
-            });
-            
-            const agora = new Date();
-            const horaAtual = agora.getHours() * 60 + agora.getMinutes();
-            
-            refeicoesDiv.innerHTML = refeicoesOrdenadas.map(refeicao => {
-                const [hora, minuto] = refeicao.horario.split(':').map(Number);
-                const horarioRefeicao = hora * 60 + minuto;
-                const insulina = calcularInsulina(refeicao.carboidratos, refeicao.insulinaPorCarb || 10);
-                
-                // Determinar se é próxima refeição (próxima 30 min)
-                const isProxima = horarioRefeicao > horaAtual && horarioRefeicao <= horaAtual + 30;
-                const isPendente = horarioRefeicao > horaAtual;
-                
-                return `
-                    <div class="refeicao-item ${isProxima ? 'hoje' : ''}">
-                        <div class="refeicao-header">
-                            <div class="refeicao-nome">
-                                ${refeicao.nome}
-                                ${isProxima ? ' 🔔' : ''}
-                                ${!isPendente ? ' ✅' : ''}
-                            </div>
-                            <div class="refeicao-horario">${refeicao.horario}</div>
-                        </div>
-                        
-                        <div style="font-size: 12px; color: #666; margin-bottom: 8px; white-space: pre-line;">
-                            ${refeicao.alimentos}
-                        </div>
-                        
-                        <div class="refeicao-macros">
-                            <div class="macro-item carbs">
-                                <div>Carbs</div>
-                                <strong>${refeicao.carboidratos}g</strong>
-                            </div>
-                            <div class="macro-item protein">
-                                <div>Prot</div>
-                                <strong>${refeicao.proteinas}g</strong>
-                            </div>
-                            <div class="macro-item fat">
-                                <div>Gord</div>
-                                <strong>${refeicao.gorduras}g</strong>
-                            </div>
-                        </div>
-                        
-                        <div class="refeicao-info">
-                            <span>🔥 ${refeicao.calorias} kcal</span>
-                            <div class="insulina-info">💉 ${insulina} unidade${insulina !== 1 ? 's' : ''}</div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-            
-            // Atualizar resumo se estivermos na aba de refeições
-            const btnRefeicoes = document.getElementById('btnRefeicoes');
-            if (btnRefeicoes && btnRefeicoes.classList.contains('active')) {
-                atualizarResumoNutricional();
-            }
-        }
-
-        // FUNÇÕES FINANCEIRAS
-        let configFinanceira = JSON.parse(localStorage.getItem('configFinanceira')) || { salario: 0 };
-        let gastosFixos = JSON.parse(localStorage.getItem('gastosFixos')) || [];
-        let gastosVariaveis = JSON.parse(localStorage.getItem('gastosVariaveis')) || [];
-        let mesAtual = new Date().getMonth() + '-' + new Date().getFullYear();
-
-        function mostrarConfigSalario() {
-            document.getElementById('configSalario').style.display = 'block';
-            document.getElementById('salarioInput').value = configFinanceira.salario || '';
-        }
-
-        function cancelarConfigSalario() {
-            document.getElementById('configSalario').style.display = 'none';
-        }
-
-        function salvarSalario() {
-            const salario = parseFloat(document.getElementById('salarioInput').value) || 0;
-            
-            if (salario <= 0) {
-                alert('Por favor, insira um salário válido!');
-                return;
-            }
-            
-            configFinanceira.salario = salario;
-            localStorage.setItem('configFinanceira', JSON.stringify(configFinanceira));
-            
-            cancelarConfigSalario();
-            atualizarResumoFinanceiro();
-            alert('Salário atualizado com sucesso!');
-        }
-
-        function mostrarFormGastoFixo() {
-            document.getElementById('modalGastoFixo').style.display = 'block';
-        }
-
-        function fecharFormGastoFixo() {
-            document.getElementById('modalGastoFixo').style.display = 'none';
-            document.getElementById('descricaoGastoFixo').value = '';
-            document.getElementById('valorGastoFixo').value = '';
-        }
-
-        function salvarGastoFixo() {
-            const descricao = document.getElementById('descricaoGastoFixo').value.trim();
-            const valor = parseFloat(document.getElementById('valorGastoFixo').value);
-            
-            if (!descricao) {
-                alert('Por favor, digite a descrição do gasto fixo!');
-                return;
-            }
-            
-            if (!valor || valor <= 0) {
-                alert('Por favor, digite um valor válido!');
-                return;
-            }
-            
-            const novoGastoFixo = {
-                id: Date.now(),
-                descricao,
-                valor
-            };
-            
-            gastosFixos.push(novoGastoFixo);
-            localStorage.setItem('gastosFixos', JSON.stringify(gastosFixos));
-            
-            fecharFormGastoFixo();
-            atualizarGastosFixos();
-            atualizarResumoFinanceiro();
-        }
-
-        function excluirGastoFixo(id) {
-            if (confirm('Tem certeza que deseja excluir este gasto fixo?')) {
-                gastosFixos = gastosFixos.filter(g => g.id !== id);
-                localStorage.setItem('gastosFixos', JSON.stringify(gastosFixos));
-                atualizarGastosFixos();
-                atualizarResumoFinanceiro();
-            }
-        }
-
-        function toggleGastosFixos() {
-            const lista = document.getElementById('listaGastosFixos');
-            const icon = document.getElementById('iconGastosFixos');
-            
-            if (lista.style.display === 'none') {
-                lista.style.display = 'block';
-                icon.textContent = '▲';
-            } else {
-                lista.style.display = 'none';
-                icon.textContent = '▼';
-            }
-        }
-
-        function mostrarFormGastoVariavel() {
-            document.getElementById('modalGastoVariavel').style.display = 'block';
-            document.getElementById('dataGastoVariavel').value = new Date().toISOString().split('T')[0];
-        }
-
-        function fecharFormGastoVariavel() {
-            document.getElementById('modalGastoVariavel').style.display = 'none';
-            document.getElementById('descricaoGastoVariavel').value = '';
-            document.getElementById('valorGastoVariavel').value = '';
-            document.getElementById('dataGastoVariavel').value = '';
-        }
-
-        function salvarGastoVariavel() {
-            const descricao = document.getElementById('descricaoGastoVariavel').value.trim();
-            const valor = parseFloat(document.getElementById('valorGastoVariavel').value);
-            const data = document.getElementById('dataGastoVariavel').value;
-            
-            if (!descricao) {
-                alert('Por favor, digite a descrição do gasto!');
-                return;
-            }
-            
-            if (!valor || valor <= 0) {
-                alert('Por favor, digite um valor válido!');
-                return;
-            }
-            
-            if (!data) {
-                alert('Por favor, selecione a data!');
-                return;
-            }
-            
-            const novoGasto = {
-                id: Date.now(),
-                descricao,
-                valor,
-                data,
-                mes: mesAtual
-            };
-            
-            gastosVariaveis.push(novoGasto);
-            localStorage.setItem('gastosVariaveis', JSON.stringify(gastosVariaveis));
-            
-            fecharFormGastoVariavel();
-            atualizarListaGastosVariaveis();
-            atualizarResumoFinanceiro();
-        }
-
-        function excluirGastoVariavel(id) {
-            if (confirm('Tem certeza que deseja excluir este gasto?')) {
-                gastosVariaveis = gastosVariaveis.filter(g => g.id !== id);
-                localStorage.setItem('gastosVariaveis', JSON.stringify(gastosVariaveis));
-                atualizarListaGastosVariaveis();
-                atualizarResumoFinanceiro();
-            }
-        }
-
-        function resetarGastosVariaveis() {
-            if (confirm('Tem certeza que deseja resetar todos os gastos variáveis do mês? Esta ação não pode ser desfeita!')) {
-                gastosVariaveis = gastosVariaveis.filter(g => g.mes !== mesAtual);
-                localStorage.setItem('gastosVariaveis', JSON.stringify(gastosVariaveis));
-                
-                atualizarListaGastosVariaveis();
-                atualizarResumoFinanceiro();
-                alert('Gastos variáveis resetados com sucesso!');
-            }
-        }
-
-        function atualizarGastosFixos() {
-            const resumoDiv = document.getElementById('resumoGastosFixos');
-            const listaDiv = document.getElementById('listaGastosFixos');
-            
-            const totalGastosFixos = gastosFixos.reduce((total, gasto) => total + gasto.valor, 0);
-            
-            resumoDiv.innerHTML = `
-                <div class="total-gastos-fixos">
-                    Total: R$ ${totalGastosFixos.toFixed(2).replace('.', ',')}
-                </div>
-            `;
-            
-            if (gastosFixos.length === 0) {
-                listaDiv.innerHTML = `
-                    <div style="text-align: center; color: #6c757d; padding: 15px;">
-                        <p>Nenhum gasto fixo cadastrado</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            listaDiv.innerHTML = gastosFixos.map(gasto => `
-                <div class="gasto-fixo-item">
-                    <div class="gasto-info">
-                        <div class="gasto-descricao">${gasto.descricao}</div>
-                        <div class="gasto-data">Mensal</div>
-                    </div>
-                    <div class="gasto-valor">R$ ${gasto.valor.toFixed(2).replace('.', ',')}</div>
-                    <button class="btn-excluir" onclick="excluirGastoFixo(${gasto.id})">🗑️</button>
-                </div>
-            `).join('');
-        }
-
-        function atualizarListaGastosVariaveis() {
-            const listaDiv = document.getElementById('listaGastosVariaveis');
-            const gastosDoMes = gastosVariaveis.filter(g => g.mes === mesAtual);
-            
-            if (gastosDoMes.length === 0) {
-                listaDiv.innerHTML = `
-                    <div style="text-align: center; color: #6c757d; padding: 15px;">
-                        <p>Nenhum gasto registrado este mês</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            const gastosOrdenados = gastosDoMes.sort((a, b) => new Date(b.data) - new Date(a.data));
-            
-            listaDiv.innerHTML = gastosOrdenados.map(gasto => {
-                const dataFormatada = new Date(gasto.data).toLocaleDateString('pt-BR');
-                
-                return `
-                    <div class="gasto-variavel-item">
-                        <div class="gasto-info">
-                            <div class="gasto-descricao">${gasto.descricao}</div>
-                            <div class="gasto-data">${dataFormatada}</div>
-                        </div>
-                        <div class="gasto-valor">R$ ${gasto.valor.toFixed(2).replace('.', ',')}</div>
-                        <button class="btn-excluir" onclick="excluirGastoVariavel(${gasto.id})">🗑️</button>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function atualizarResumoFinanceiro() {
-            const saldoDiv = document.getElementById('saldoDisponivel');
-            const progressoDiv = document.getElementById('progressoGastos');
-            
-            const salario = configFinanceira.salario || 0;
-            const totalGastosFixos = gastosFixos.reduce((total, gasto) => total + gasto.valor, 0);
-            const gastosDoMes = gastosVariaveis
-                .filter(g => g.mes === mesAtual)
-                .reduce((total, gasto) => total + gasto.valor, 0);
-            
-            const rendaDisponivel = salario - totalGastosFixos;
-            const saldoFinal = rendaDisponivel - gastosDoMes;
-            const percentualGasto = rendaDisponivel > 0 ? (gastosDoMes / rendaDisponivel) * 100 : 0;
-            
-            if (salario === 0) {
-                saldoDiv.innerHTML = `
-                    <div class="empty-state">
-                        <span class="icon">⚙️</span>
-                        <h3>Configure seu salário</h3>
-                        <p>Clique no botão "Salário" para começar</p>
-                    </div>
-                `;
-                progressoDiv.innerHTML = '';
-                return;
-            }
-            
-            const isPositivo = saldoFinal >= 0;
-            
-            saldoDiv.innerHTML = `
-                <div class="saldo-principal">
-                    <div class="saldo-valor">R$ ${salario.toFixed(2).replace('.', ',')}</div>
-                    <div class="saldo-label">Salário Mensal</div>
-                </div>
-                
-                <div class="resumo-grid">
-                    <div class="resumo-item">
-                        <span class="valor" style="color: #ffc107;">R$ ${totalGastosFixos.toFixed(2).replace('.', ',')}</span>
-                        <span class="label">Gastos Fixos</span>
-                    </div>
-                    <div class="resumo-item">
-                        <span class="valor" style="color: #28a745;">R$ ${rendaDisponivel.toFixed(2).replace('.', ',')}</span>
-                        <span class="label">Renda Disponível</span>
-                    </div>
-                    <div class="resumo-item">
-                        <span class="valor" style="color: #dc3545;">R$ ${gastosDoMes.toFixed(2).replace('.', ',')}</span>
-                        <span class="label">Gastos do Mês</span>
-                    </div>
-                    <div class="resumo-item">
-                        <span class="valor" style="color: ${isPositivo ? '#28a745' : '#dc3545'};">
-                            ${saldoFinal >= 0 ? '+' : ''}R$ ${saldoFinal.toFixed(2).replace('.', ',')}
-                        </span>
-                        <span class="label">Saldo Final</span>
-                    </div>
-                </div>
-            `;
-            
-            // Barra de progresso dos gastos
-            const corBarra = percentualGasto <= 50 ? '#28a745' : 
-                            percentualGasto <= 80 ? '#ffc107' : '#dc3545';
-            
-            progressoDiv.innerHTML = `
-                <div style="margin-top: 15px;">
-                    <div class="progresso-info">
-                        <strong>Gastos Variáveis</strong>
-                        <strong>${percentualGasto.toFixed(1)}% da renda disponível</strong>
-                    </div>
-                    <div class="progresso-container">
-                        <div class="progresso-barra" style="width: ${Math.min(percentualGasto, 100)}%; background: ${corBarra};"></div>
-                    </div>
-                    <div style="font-size: 12px; color: #6c757d; text-align: center; margin-top: 5px;">
-                        R$ ${gastosDoMes.toFixed(2).replace('.', ',')} de R$ ${rendaDisponivel.toFixed(2).replace('.', ',')} disponíveis
-                    </div>
-                </div>
-            `;
-        }
-
-        function salvarCarga(chaveHistorico) {
-            const input = document.getElementById(`carga-${chaveHistorico}`);
-            const carga = input.value;
-            
-            if (carga) {
-                historicoCargas[chaveHistorico] = carga;
-                localStorage.setItem('historicoCargas', JSON.stringify(historicoCargas));
-                input.value = '';
-                atualizarTreinoHoje();
-            }
-        }
-
-        function verificarLembretesUrgentes() {
-            const agora = new Date();
-            const hoje = agora.toISOString().split('T')[0];
-            const horaAtual = agora.getHours() * 60 + agora.getMinutes();
-            
-            const atrasados = lembretes.filter(l => {
-                if (l.concluido) return false;
-                
-                const dataLembrete = new Date(l.data + ' ' + l.horario);
-                return dataLembrete < agora;
-            });
-            
-            const hojeRestante = lembretes.filter(l => {
-                if (l.concluido || l.data !== hoje) return false;
-                
-                const [hora, minuto] = l.horario.split(':').map(Number);
-                const horarioLembrete = hora * 60 + minuto;
-                return horarioLembrete > horaAtual;
-            });
-            
-            const alertaDiv = document.getElementById('alertaLembretes');
-            
-            if (atrasados.length > 0) {
-                alertaDiv.innerHTML = `
-                    <div class="alerta-lembretes">
-                        🚨 ${atrasados.length} tarefa${atrasados.length > 1 ? 's' : ''} atrasada${atrasados.length > 1 ? 's' : ''}!
-                    </div>
-                `;
-                alertaDiv.style.display = 'block';
-            } else if (hojeRestante.length > 0) {
-                alertaDiv.innerHTML = `
-                    <div class="alerta-lembretes alerta-hoje">
-                        📅 ${hojeRestante.length} tarefa${hojeRestante.length > 1 ? 's' : ''} para hoje
-                    </div>
-                `;
-                alertaDiv.style.display = 'block';
-            } else {
-                alertaDiv.style.display = 'none';
-            }
-        }
-
-        function agendarNotificacao(lembrete) {
-            // Manter a função original por compatibilidade
-            // mas focar nos alertas visuais
-            if ('Notification' in window && Notification.permission === 'granted') {
-                const dataNotificacao = new Date(lembrete.data + ' ' + lembrete.horario);
-                const agora = new Date();
-                const tempoAteNotificacao = dataNotificacao.getTime() - agora.getTime();
-                
-                if (tempoAteNotificacao > 0 && tempoAteNotificacao < 24 * 60 * 60 * 1000) { // Só até 24h
-                    setTimeout(() => {
-                        new Notification('🔔 Lembrete!', {
-                            body: lembrete.tarefa,
-                            icon: '📋',
-                            tag: 'lembrete-' + lembrete.id
-                        });
-                    }, tempoAteNotificacao);
-                }
-            }
-        }
-
-        // Inicializar app
-        document.addEventListener('DOMContentLoaded', function() {
-            updateDate();
-            atualizarListaLembretes();
-            verificarLembretesUrgentes();
-            atualizarTreinoHoje();
-            atualizarRefeicoesHoje();
-            atualizarGastosFixos();
-            atualizarListaGastosVariaveis();
-            atualizarResumoFinanceiro();
-            
-            // Solicitar permissão para notificações
-            if ('Notification' in window && Notification.permission === 'default') {
-                Notification.requestPermission().then(permission => {
-                    if (permission === 'granted') {
-                        console.log('Notificações permitidas!');
-                    }
-                });
-            }
-        });
-
-        // Atualizar verificações periodicamente
-        setInterval(() => {
-            updateDate();
-            verificarLembretesUrgentes();
-        }, 60000);
-    </script>
-</body>
-</html>="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <h4 style="color: #ffc107; margin: 0; cursor: pointer;" onclick="toggleGastosFixos()">
-                            🏠 Gastos Fixos <span id="iconGastosFixos">▼</span>
-                        </h4>
-                        <button onclick="mostrarFormGastoFixo()" style="background: #ffc107; color: #333; border: none; padding: 6px 12px; border-radius: 15px; font-size: 12px; font-weight: 600;">+ Adicionar</button>
-                    </div>
-                    <div id="resumoGastosFixos"></div>
-                    <div id="listaGastosFixos" style="display: none;"></div>
-                </div>
-                
-                <!-- Gastos Variáveis -->
-                <div class="card">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <h4 style="color: #dc3545; margin: 0;">📝 Gastos do Mês</h4>
-                        <button onclick="mostrarFormGastoVariavel()" style="background: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 15px; font-size: 12px; font-weight: 600;">+ Adicionar</button>
-                    </div>
-                    <div id="listaGastosVariaveis"></div>
-                </div>
-                
-                <!-- Botões de Ação -->
-                <div style="display: flex; gap: 10px; margin-top: 15px;">
-                    <button class="btn" onclick="mostrarConfigSalario()" style="flex: 1; background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-                        💵 Salário
-                    </button>
-                    <button class="btn" onclick="resetarGastosVariaveis()" style="flex: 1; background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);">
-                        🔄 Resetar Gastos
-                    </button>
-                </div>
-                
-                <!-- Modal para Gasto Fixo -->
-                <div id="modalGastoFixo" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000;">
-                    <div style="background: white; margin: 50px 20px; border-radius: 15px; padding: 20px;">
-                        <h3 style="color: #ffc107; margin: 0 0 20px 0; text-align: center;">🏠 Adicionar Gasto Fixo</h3>
-                        
-                        <div class="input-grupo">
-                            <label>Descrição:</label>
-                            <input type="text" id="descricaoGastoFixo" placeholder="Ex: Academia, Netflix">
-                        </div>
-                        
-                        <div class="input-grupo">
-                            <label>Valor Mensal:</label>
-                            <input type="number" id="valorGastoFixo" placeholder="Ex: 150.00" step="0.01">
-                        </div>
-                        
-                        <div style="display: flex; gap: 10px; margin-top: 20px;">
-                            <button class="btn" onclick="salvarGastoFixo()" style="flex: 1; background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-                                ✅ Salvar
-                            </button>
-                            <button class="btn" onclick="fecharFormGastoFixo()" style="flex: 1; background: linear-gradient(135deg, #6c757d 0%, #495057 100%);">
-                                ❌ Cancelar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Modal para Gasto Variável -->
-                <div id="modalGastoVariavel" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000;">
-                    <div style="background: white; margin: 50px 20px; border-radius: 15px; padding: 20px;">
-                        <h3 style="color: #dc3545; margin: 0 0 20px 0; text-align: center;">📝 Adicionar Gasto</h3>
-                        
-                        <div class="input-grupo">
-                            <label>Descrição:</label>
-                            <input type="text" id="descricaoGastoVariavel" placeholder="Ex: Supermercado, Gasolina">
-                        </div>
-                        
-                        <div class="input-grupo">
-                            <label>Valor:</label>
-                            <input type="number" id="valorGastoVariavel" placeholder="Ex: 150.00" step="0.01">
-                        </div>
-                        
-                        <div class="input-grupo">
-                            <label>Data:</label>
-                            <input type="date" id="dataGastoVariavel">
-                        </div>
-                        
-                        <div style="display: flex; gap: 10px; margin-top: 20px;">
-                            <button class="btn" onclick="salvarGastoVariavel()" style="flex: 1; background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-                                ✅ Salvar
-                            </button>
-                            <button class="btn" onclick="fecharFormGastoVariavel()" style="flex: 1; background: linear-gradient(135deg, #6c757d 0%, #495057 100%);">
-                                ❌ Cancelar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // Função para mostrar a data atual
-        function updateDate() {
-            const now = new Date();
-            const options = { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-            };
-            const dateString = now.toLocaleDateString('pt-BR', options);
-            document.getElementById('dateInfo').textContent = dateString;
-        }
-
-        // Função para trocar entre abas
-        function showTab(tabName) {
-            // Remover classe active de todas as abas
-            const tabs = document.querySelectorAll('.tab');
-            const contents = document.querySelectorAll('.tab-content');
-            
-            tabs.forEach(tab => tab.classList.remove('active'));
-            contents.forEach(content => content.classList.remove('active'));
-            
-            // Adicionar classe active na aba selecionada
-            event.target.classList.add('active');
-            document.getElementById(tabName).classList.add('active');
-        }
-
-        // FUNÇÕES DOS LEMBRETES
-        let lembretes = JSON.parse(localStorage.getItem('lembretes')) || [];
-
-        function mostrarFormLembrete() {
-            document.getElementById('formLembrete').style.display = 'block';
-            document.getElementById('emptyState').style.display = 'none';
-            
-            // Definir data padrão como hoje
-            const hoje = new Date().toISOString().split('T')[0];
-            document.getElementById('dataInput').value = hoje;
-        }
-
-        function cancelarLembrete() {
-            document.getElementById('formLembrete').style.display = 'none';
-            document.getElementById('tarefaInput').value = '';
-            document.getElementById('dataInput').value = '';
-            document.getElementById('horarioInput').value = '';
-            atualizarListaLembretes();
-        }
-
-        function salvarLembrete() {
-            const tarefa = document.getElementById('tarefaInput').value.trim();
-            const data = document.getElementById('dataInput').value;
-            const horario = document.getElementById('horarioInput').value;
-            
-            if (!tarefa) {
-                alert('Por favor, digite a tarefa!');
-                return;
-            }
-            
-            if (!data) {
-                alert('Por favor, selecione a data!');
-                return;
-            }
-            
-            if (!horario) {
-                alert('Por favor, selecione o horário!');
-                return;
-            }
-            
-            const novoLembrete = {
-                id: Date.now(),
-                tarefa: tarefa,
-                data: data,
-                horario: horario,
-                concluido: false,
-                criado: new Date().toISOString()
-            };
-            
-            lembretes.push(novoLembrete);
-            localStorage.setItem('lembretes', JSON.stringify(lembretes));
-            
-            // Agendar notificação
-            agendarNotificacao(novoLembrete);
-            
-            cancelarLembrete();
-            atualizarListaLembretes();
-        }
-
-        function atualizarListaLembretes() {
-            const lista = document.getElementById('listaLembretes');
-            const emptyState = document.getElementById('emptyState');
-            
-            if (lembretes.length === 0) {
-                lista.innerHTML = '';
-                emptyState.style.display = 'block';
-                verificarLembretesUrgentes();
-                return;
-            }
-            
-            emptyState.style.display = 'none';
-            
-            // Ordenar por data e horário
-            const lembretesOrdenados = lembretes.sort((a, b) => {
-                const dataA = new Date(a.data + ' ' + a.horario);
-                const dataB = new Date(b.data + ' ' + b.horario);
-                return dataA - dataB;
-            });
-            
-            lista.innerHTML = lembretesOrdenados.map(lembrete => {
-                const dataLembrete = new Date(lembrete.data + ' ' + lembrete.horario);
-                const hoje = new Date();
-                const amanha = new Date(hoje);
-                amanha.setDate(hoje.getDate() + 1);
-                
-                let classeUrgencia = '';
-                if (dataLembrete < hoje && !lembrete.concluido) {
-                    classeUrgencia = 'urgente';
-                } else if (lembrete.data === hoje.toISOString().split('T')[0]) {
-                    classeUrgencia = 'hoje';
-                }
-                
-                const dataFormatada = new Date(lembrete.data).toLocaleDateString('pt-BR');
-                
-                return `
-                    <div class="lembrete-item ${classeUrgencia} ${lembrete.concluido ? 'concluido' : ''}">
-                        <div class="lembrete-header">
-                            <div class="lembrete-titulo">${lembrete.tarefa}</div>
-                            <div class="lembrete-status">
-                                ${!lembrete.concluido ? 
-                                    `<button class="btn-pequeno btn-concluir" onclick="concluirLembrete(${lembrete.id})">✓</button>` : 
-                                    ''
-                                }
-                                <button class="btn-pequeno btn-excluir" onclick="excluirLembrete(${lembrete.id})">🗑️</button>
-                            </div>
-                        </div>
-                        <div class="lembrete-info">
-                            <span>📅 ${dataFormatada}</span>
-                            <span>⏰ ${lembrete.horario}</span>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-            
-            verificarLembretesUrgentes();
-        }
-
-        function concluirLembrete(id) {
-            lembretes = lembretes.map(lembrete => 
-                lembrete.id === id ? {...lembrete, concluido: true} : lembrete
-            );
-            localStorage.setItem('lembretes', JSON.stringify(lembretes));
-            atualizarListaLembretes();
-        }
-
-        function excluirLembrete(id) {
-            if (confirm('Tem certeza que deseja excluir este lembrete?')) {
-                lembretes = lembretes.filter(lembrete => lembrete.id !== id);
-                localStorage.setItem('lembretes', JSON.stringify(lembretes));
-                atualizarListaLembretes();
-            }
-        }
-
-        // FUNÇÕES DOS TREINOS
-        let treinos = JSON.parse(localStorage.getItem('treinos')) || [];
-        let diasSemanaConfig = JSON.parse(localStorage.getItem('diasSemanaConfig')) || {};
-        let historicoCargas = JSON.parse(localStorage.getItem('historicoCargas')) || {};
-
-        const diasSemana = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
-
-        function mostrarConfigTreinos() {
-            document.getElementById('modalTreinos').style.display = 'block';
-            carregarConfigTreinos();
-        }
-
-        function fecharConfigTreinos() {
-            document.getElementById('modalTreinos').style.display = 'none';
-        }
-
-        function carregarConfigTreinos() {
-            // Carregar dias da semana
-            const diasDiv = document.getElementById('diasSemana');
-            diasDiv.innerHTML = diasSemana.map((dia, index) => `
-                <div class="dia-semana">
-                    <strong style="width: 80px;">${dia.charAt(0).toUpperCase() + dia.slice(1)}:</strong>
-                    <span style="font-size: 12px; color: #6c757d; width: 60px;">(${index === 0 ? 'Dom' : index === 1 ? 'Seg' : index === 2 ? 'Ter' : index === 3 ? 'Qua' : index === 4 ? 'Qui' : index === 5 ? 'Sex' : 'Sáb'})</span>
-                    <select id="select-${dia}">
-                        <option value="">Descanso</option>
-                        ${treinos.map(treino => 
-                            `<option value="${treino.id}" ${diasSemanaConfig[dia] === treino.id ? 'selected' : ''}>
-                                ${treino.nome}
-                            </option>`
-                        ).join('')}
-                    </select>
-                </div>
-            `).join('');
-
-            // Carregar treinos
-            const treinosDiv = document.getElementById('listaTreinos');
-            if (treinos.length === 0) {
-                treinosDiv.innerHTML = '<p style="text-align: center; color: #6c757d;">Nenhum treino cadastrado ainda</p>';
-                return;
-            }
-
-            treinosDiv.innerHTML = treinos.map(treino => `
-                <div class="treino-config">
-                    <div class="treino-titulo">
-                        <h4 style="color: #4facfe; margin: 0;">${treino.nome}</h4>
-                        <button onclick="excluirTreino('${treino.id}')" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 12px;">🗑️</button>
-                    </div>
-                    <div id="exercicios-${treino.id}">
-                        ${treino.exercicios.map((ex, index) => `
-                            <div style="margin-bottom: 10px; padding: 8px; background: white; border-radius: 4px;">
-                                <input type="text" value="${ex.nome}" placeholder="Nome do exercício" 
-                                       onchange="atualizarExercicio('${treino.id}', ${index}, 'nome', this.value)"
-                                       style="width: 100%; padding: 6px; margin-bottom: 6px; border: 1px solid #ddd; border-radius: 4px;">
-                                <div style="display: flex; gap: 10px;">
-                                    <input type="number" value="${ex.series}" placeholder="Séries" 
-                                           onchange="atualizarExercicio('${treino.id}', ${index}, 'series', this.value)"
-                                           style="width: 60px; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
-                                    <span style="display: flex; align-items: center;">x</span>
-                                    <input type="number" value="${ex.repeticoes}" placeholder="Reps" 
-                                           onchange="atualizarExercicio('${treino.id}', ${index}, 'repeticoes', this.value)"
-                                           style="width: 60px; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
-                                    <button onclick="removerExercicio('${treino.id}', ${index})" 
-                                            style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 12px;">❌</button>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                    <button onclick="adicionarExercicio('${treino.id}')" 
-                            style="background: #28a745; color: white; border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; margin-top: 8px;">
-                        + Adicionar Exercício
-                    </button>
-                </div>
-            `).join('');
-        }
-
-        function adicionarTreino() {
-            const nome = prompt('Nome do treino (ex: Treino A, Peito/Tríceps):');
-            if (!nome) return;
-
-            const novoTreino = {
-                id: Date.now().toString(),
-                nome: nome,
-                exercicios: []
-            };
-
-            treinos.push(novoTreino);
-            carregarConfigTreinos();
-        }
-
-        function excluirTreino(id) {
-            if (confirm('Tem certeza que deseja excluir este treino?')) {
-                treinos = treinos.filter(t => t.id !== id);
-                carregarConfigTreinos();
-            }
-        }
-
-        function adicionarExercicio(treinoId) {
-            const treino = treinos.find(t => t.id === treinoId);
-            if (treino) {
-                treino.exercicios.push({
-                    nome: '',
-                    series: 4,
-                    repeticoes: 12
-                });
-                carregarConfigTreinos();
-            }
-        }
-
-        function removerExercicio(treinoId, index) {
-            const treino = treinos.find(t => t.id === treinoId);
-            if (treino) {
-                treino.exercicios.splice(index, 1);
-                carregarConfigTreinos();
-            }
-        }
-
-        function atualizarExercicio(treinoId, index, campo, valor) {
-            const treino = treinos.find(t => t.id === treinoId);
-            if (treino && treino.exercicios[index]) {
-                treino.exercicios[index][campo] = valor;
-            }
-        }
-
-        function salvarConfigTreinos() {
-            // Salvar configuração dos dias
-            diasSemana.forEach(dia => {
-                const select = document.getElementById(`select-${dia}`);
-                if (select) {
-                    diasSemanaConfig[dia] = select.value;
-                }
-            });
-
-            localStorage.setItem('treinos', JSON.stringify(treinos));
-            localStorage.setItem('diasSemanaConfig', JSON.stringify(diasSemanaConfig));
-            
-            fecharConfigTreinos();
-            atualizarTreinoHoje();
-            alert('Configuração salva com sucesso!');
-        }
-
-        function atualizarTreinoHoje() {
-            const hoje = new Date().getDay(); // 0=domingo, 1=segunda...
-            const nomeDia = diasSemana[hoje];
-            const treinoId = diasSemanaConfig[nomeDia];
-            
-            const treinoDiv = document.getElementById('treinoHoje');
-            
-            if (!treinoId) {
-                treinoDiv.innerHTML = `
-                    <div class="empty-state">
-                        <span class="icon">😴</span>
-                        <h3>Hoje é dia de descanso!</h3>
-                        <p>${nomeDia.charAt(0).toUpperCase() + nomeDia.slice(1)}</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            const treino = treinos.find(t => t.id === treinoId);
-            if (!treino || treino.exercicios.length === 0) {
-                treinoDiv.innerHTML = `
-                    <div class="empty-state">
-                        <span class="icon">💪</span>
-                        <h3>Configure seus treinos</h3>
-                        <p>Adicione exercícios ao treino de ${nomeDia}</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            treinoDiv.innerHTML = `
-                <div style="margin-bottom: 15px;">
-                    <h4 style="color: #4facfe; margin: 0 0 5px 0;">${treino.nome}</h4>
-                    <p style="color: #6c757d; margin: 0; font-size: 14px;">${nomeDia.charAt(0).toUpperCase() + nomeDia.slice(1)}</p>
-                </div>
-                ${treino.exercicios.map((exercicio, index) => {
-                    const chaveHistorico = `${treinoId}-${index}`;
-                    const ultimaCarga = historicoCargas[chaveHistorico] || '';
-                    
-                    return `
-                        <div class="exercicio-item">
-                            <div class="exercicio-header">
-                                <div class="exercicio-nome">${exercicio.nome}</div>
-                            </div>
-                            <div class="exercicio-series">${exercicio.series} séries x ${exercicio.repeticoes} repetições</div>
-                            <div class="carga-input">
-                                <span style="font-size: 14px; color: #333;">Carga:</span>
-                                <input type="number" id="carga-${chaveHistorico}" placeholder="kg" step="0.5">
-                                <button onclick="salvarCarga('${chaveHistorico}')" 
-                                        style="background: #4facfe; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 12px;">✓</button>
-                            </div>
-                            ${ultimaCarga ? `<div class="carga-ultima">Última: ${ultimaCarga}kg</div>` : ''}
-                        </div>
-                    `;
-                }).join('')}
-            `;
-        }
-
-        // FUNÇÕES DAS REFEIÇÕES
-        let refeicoes = JSON.parse(localStorage.getItem('refeicoes')) || [];
-
-        function calcularInsulina(carboidratos, insulinaPorCarb) {
-            if (!carboidratos || !insulinaPorCarb) return 0;
-            const resultado = carboidratos / insulinaPorCarb;
-            const decimal = resultado % 1;
-            
-            if (decimal >= 0.5) {
-                return Math.ceil(resultado);
-            } else {
-                return Math.floor(resultado);
-            }
-        }
-
-        function atualizarResumoNutricional() {
-            const resumoDiv = document.getElementById('resumoNutricional');
-            const conteudoDiv = document.getElementById('conteudoResumo');
-            
-            if (refeicoes.length === 0) {
-                resumoDiv.style.display = 'none';
-                return;
-            }
-            
-            // Calcular totais
-            let totalCalorias = 0;
-            let totalCarboidratos = 0;
-            let totalProteinas = 0;
-            let totalGorduras = 0;
-            let totalInsulina = 0;
-            
-            refeicoes.forEach(refeicao => {
-                totalCalorias += Number(refeicao.calorias) || 0;
-                totalCarboidratos += Number(refeicao.carboidratos) || 0;
-                totalProteinas += Number(refeicao.proteinas) || 0;
-                totalGorduras += Number(refeicao.gorduras) || 0;
-                totalInsulina += calcularInsulina(refeicao.carboidratos, refeicao.insulinaPorCarb || 10);
-            });
-            
-            conteudoDiv.innerHTML = `
-                <div class="resumo-calorias">
-                    <div style="font-size: 20px; font-weight: bold;">🔥 ${totalCalorias} kcal</div>
-                    <div style="font-size: 12px; opacity: 0.9;">Total do dia</div>
-                </div>
-                
-                <div class="resumo-macros">
-                    <div class="resumo-macro carbs">
-                        <span class="valor">${totalCarboidratos}g</span>
-                        <span class="label">Carboidratos</span>
-                    </div>
-                    <div class="resumo-macro protein">
-                        <span class="valor">${totalProteinas}g</span>
-                        <span class="label">Proteínas</span>
-                    </div>
-                    <div class="resumo-macro fat">
-                        <span class="valor">${totalGorduras}g</span>
-                        <span class="label">Gorduras</span>
-                    </div>
-                </div>
-                
-                <div class="resumo-insulina">
-                    <div style="font-size: 16px; font-weight: bold;">💉 ${totalInsulina} unidade${totalInsulina !== 1 ? 's' : ''} de insulina</div>
-                    <div style="font-size: 11px; opacity: 0.9;">Total do dia</div>
-                </div>
-            `;
-            
-            resumoDiv.style.display = 'block';
-        }
-
-        function mostrarSubAba(aba) {
-            // Remover classe active de todas as sub-abas
-            document.querySelectorAll('.sub-tab').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('.sub-content').forEach(content => content.classList.remove('active'));
-            
-            // Adicionar classe active na aba selecionada
-            document.getElementById('btn' + aba.charAt(0).toUpperCase() + aba.slice(1)).classList.add('active');
-            document.getElementById('sub' + aba.charAt(0).toUpperCase() + aba.slice(1)).classList.add('active');
-            
-            // Mostrar/ocultar resumo nutricional apenas na aba de refeições
-            const resumoDiv = document.getElementById('resumoNutricional');
-            if (aba === 'refeicoes') {
-                atualizarResumoNutricional();
-            } else {
-                resumoDiv.style.display = 'none';
-            }
-        }
-
-        function mostrarConfigRefeicoes() {
-            document.getElementById('modalRefeicoes').style.display = 'block';
-            carregarConfigRefeicoes();
-        }
-
-        function fecharConfigRefeicoes() {
-            document.getElementById('modalRefeicoes').style.display = 'none';
-        }
-
-        function carregarConfigRefeicoes() {
-            const refeicoesDiv = document.getElementById('listaRefeicoes');
-            
-            if (refeicoes.length === 0) {
-                refeicoesDiv.innerHTML = '<p style="text-align: center; color: #6c757d;">Nenhuma refeição cadastrada ainda</p>';
-                return;
-            }
-
-            refeicoesDiv.innerHTML = refeicoes.map(refeicao => `
-                <div class="refeicao-config">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <h4 style="color: #28a745; margin: 0;">Refeição</h4>
-                        <button onclick="excluirRefeicao('${refeicao.id}')" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 12px;">🗑️</button>
-                    </div>
-                    
-                    <div class="input-grupo">
-                        <label>Nome da refeição:</label>
-                        <input type="text" value="${refeicao.nome}" onchange="atualizarRefeicao('${refeicao.id}', 'nome', this.value)" placeholder="Ex: Café da manhã">
-                    </div>
-                    
-                    <div class="input-grupo">
-                        <label>Horário:</label>
-                        <input type="time" value="${refeicao.horario}" onchange="atualizarRefeicao('${refeicao.id}', 'horario', this.value)">
-                    </div>
-                    
-                    <div class="input-grupo">
-                        <label>Alimentos:</label>
-                        <textarea rows="3" onchange="atualizarRefeicao('${refeicao.id}', 'alimentos', this.value)" placeholder="Ex: 2 fatias de pão integral, 1 ovo, 200ml de leite">${refeicao.alimentos}</textarea>
-                    </div>
-                    
-                    <div class="macros-grid">
-                        <div class="input-grupo">
-                            <label>Carboidratos:</label>
-                            <input type="number" value="${refeicao.carboidratos}" onchange="atualizarRefeicao('${refeicao.id}', 'carboidratos', this.value)" step="0.1">
-                        </div>
-                        <div class="input-grupo">
-                            <label>Proteínas:</label>
-                            <input type="number" value="${refeicao.proteinas}" onchange="atualizarRefeicao('${refeicao.id}', 'proteinas', this.value)" step="0.1">
-                        </div>
-                        <div class="input-grupo">
-                            <label>Gorduras:</label>
-                            <input type="number" value="${refeicao.gorduras}" onchange="atualizarRefeicao('${refeicao.id}', 'gorduras', this.value)" step="0.1">
-                        </div>
-                    </div>
-                    
-                    <div style<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Minha Rotina</title>
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="Minha Rotina">
-    
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 10px;
-        }
-
-        .container {
-            max-width: 400px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            overflow: hidden;
-            min-height: calc(100vh - 20px);
-        }
-
-        .header {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-            color: white;
-            padding: 20px;
-            text-align: center;
-        }
-
-        .header h1 {
-            font-size: 24px;
-            margin-bottom: 5px;
-        }
-
-        .date-info {
-            font-size: 14px;
-            opacity: 0.9;
-        }
-
-        .tabs {
-            display: flex;
-            background: #f8f9fa;
-            border-bottom: 1px solid #e9ecef;
-        }
-
-        .tab {
-            flex: 1;
-            padding: 15px 10px;
-            text-align: center;
-            background: none;
-            border: none;
-            font-size: 12px;
-            font-weight: 600;
-            color: #6c757d;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .tab.active {
-            background: white;
-            color: #4facfe;
-            border-bottom: 3px solid #4facfe;
-        }
-
-        .tab:hover {
-            background: #e9ecef;
-        }
-
-        .content {
-            padding: 20px;
-            min-height: 400px;
-        }
-
-        .tab-content {
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        .section-title {
-            font-size: 20px;
-            color: #333;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-        }
-
-        .section-title::before {
-            content: '';
-            width: 4px;
-            height: 24px;
-            background: #4facfe;
-            margin-right: 10px;
-            border-radius: 2px;
-        }
-
-        .card {
-            background: #f8f9fa;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 15px;
-            border: 1px solid #e9ecef;
-        }
-
-        .btn {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 25px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s ease;
-            width: 100%;
-            font-size: 16px;
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-        }
-
-        .btn:active {
-            transform: translateY(0);
-        }
-
-        .empty-state {
-            text-align: center;
-            color: #6c757d;
-            padding: 40px 20px;
-        }
-
-        .empty-state .icon {
-            font-size: 48px;
-            margin-bottom: 15px;
-            display: block;
-        }
-
-        .lembrete-item {
-            background: white;
-            border-radius: 12px;
-            padding: 15px;
-            margin-bottom: 10px;
-            border: 1px solid #e9ecef;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-
-        .lembrete-item.concluido {
-            opacity: 0.6;
-            text-decoration: line-through;
-        }
-
-        .lembrete-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 8px;
-        }
-
-        .lembrete-titulo {
-            font-weight: 600;
-            color: #333;
-            flex: 1;
-        }
-
-        .lembrete-status {
-            display: flex;
-            gap: 8px;
-        }
-
-        .btn-pequeno {
-            padding: 6px 12px;
-            font-size: 12px;
-            border-radius: 15px;
-            border: none;
-            cursor: pointer;
-            font-weight: 600;
-        }
-
-        .btn-concluir {
-            background: #28a745;
-            color: white;
-        }
-
-        .btn-excluir {
-            background: #dc3545;
-            color: white;
-        }
-
-        .lembrete-info {
-            font-size: 14px;
-            color: #6c757d;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-
-        .alerta-lembretes {
-            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
-            color: white;
-            padding: 8px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            text-align: center;
-        }
-
-        .alerta-hoje {
-            background: linear-gradient(135deg, #ffc107 0%, #ffb300 100%);
-            color: #333;
-        }
-
-        .exercicio-item {
-            background: #f8f9fa;
-            border-radius: 8px;
-            padding: 12px;
-            margin-bottom: 8px;
-            border-left: 4px solid #4facfe;
-        }
-
-        .exercicio-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-        }
-
-        .exercicio-nome {
-            font-weight: 600;
-            color: #333;
-            flex: 1;
-        }
-
-        .exercicio-series {
-            font-size: 14px;
-            color: #6c757d;
-            margin-bottom: 8px;
-        }
-
-        .carga-input {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .carga-input input {
-            width: 60px;
-            padding: 6px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            text-align: center;
-            font-size: 14px;
-        }
-
-        .carga-ultima {
-            font-size: 12px;
-            color: #28a745;
-            font-weight: 600;
-        }
-
-        .treino-config {
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
-            background: #f8f9fa;
-        }
-
-        .treino-titulo {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .dia-semana {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 10px;
-            padding: 8px;
-            background: white;
-            border-radius: 6px;
-        }
-
-        .dia-semana select {
-            padding: 6px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-
-        .resumo-macros {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-
-        .resumo-macro {
-            text-align: center;
-            padding: 12px;
-            border-radius: 8px;
-            font-weight: 600;
-        }
-
-        .resumo-macro .valor {
-            font-size: 18px;
-            display: block;
-            margin-bottom: 2px;
-        }
-
-        .resumo-macro .label {
-            font-size: 12px;
-            opacity: 0.8;
-        }
-
-        .resumo-calorias {
-            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
-            color: white;
-            text-align: center;
-            padding: 10px;
-            border-radius: 8px;
-            margin-bottom: 10px;
-        }
-
-        .resumo-insulina {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-            color: white;
-            text-align: center;
-            padding: 8px;
-            border-radius: 8px;
-        }
-
-        .sub-tab {
-            flex: 1;
-            padding: 12px;
-            background: none;
-            border: none;
-            border-radius: 6px;
-            font-weight: 600;
-            color: #6c757d;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .sub-tab.active {
-            background: white;
-            color: #4facfe;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        .sub-content {
-            display: none;
-        }
-
-        .saldo-principal {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-            color: white;
-            text-align: center;
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 15px;
-        }
-
-        .saldo-positivo {
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-            color: white;
-            text-align: center;
-            padding: 15px;
-            border-radius: 12px;
-            margin-bottom: 10px;
-        }
-
-        .saldo-negativo {
-            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
-            color: white;
-            text-align: center;
-            padding: 15px;
-            border-radius: 12px;
-            margin-bottom: 10px;
-        }
-
-        .saldo-valor {
-            font-size: 24px;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-
-        .saldo-label {
-            font-size: 12px;
-            opacity: 0.9;
-        }
-
-        .resumo-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-
-        .resumo-item {
-            background: #f8f9fa;
-            padding: 12px;
-            border-radius: 8px;
-            text-align: center;
-        }
-
-        .resumo-item .valor {
-            font-weight: bold;
-            font-size: 16px;
-            margin-bottom: 4px;
-            display: block;
-        }
-
-        .resumo-item .label {
-            font-size: 12px;
-            color: #6c757d;
-        }
-
-        .progresso-container {
-            background: #e9ecef;
-            border-radius: 10px;
-            height: 8px;
-            overflow: hidden;
-            margin: 10px 0;
-        }
-
-        .progresso-barra {
-            height: 100%;
-            border-radius: 10px;
-            transition: width 0.3s ease;
-        }
-
-        .progresso-info {
-            display: flex;
-            justify-content: space-between;
-            font-size: 12px;
-            color: #6c757d;
-            margin-bottom: 5px;
-        }
-
-        .gasto-fixo-item, .gasto-variavel-item {
-            background: white;
-            border-radius: 8px;
-            padding: 12px;
-            margin-bottom: 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-
-        .gasto-fixo-item {
-            border-left: 4px solid #ffc107;
-        }
-
-        .gasto-variavel-item {
-            border-left: 4px solid #dc3545;
-        }
-
-        .gasto-info {
-            flex: 1;
-        }
-
-        .gasto-descricao {
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 2px;
-        }
-
-        .gasto-data {
-            font-size: 12px;
-            color: #6c757d;
-        }
-
-        .gasto-valor {
-            font-weight: bold;
-            color: #333;
-            margin-right: 10px;
-        }
-
-        .btn-excluir {
-            background: #dc3545;
-            color: white;
-            border: none;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            cursor: pointer;
-        }
-
-        .total-gastos-fixos {
-            background: linear-gradient(135deg, #ffc107 0%, #ffb300 100%);
-            color: #333;
-            text-align: center;
-            padding: 10px;
-            border-radius: 8px;
-            margin-top: 10px;
-            font-weight: bold;
-        }
-
-        .sub-content.active {
-            display: block;
-        }
-
-        .refeicao-item {
-            background: white;
-            border-radius: 12px;
-            padding: 15px;
-            margin-bottom: 10px;
-            border: 1px solid #e9ecef;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-
-        .refeicao-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 10px;
-        }
-
-        .refeicao-nome {
-            font-weight: 600;
-            color: #333;
-            flex: 1;
-        }
-
-        .refeicao-horario {
-            font-size: 14px;
-            color: #28a745;
-            font-weight: 600;
-        }
-
-        .refeicao-macros {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 10px;
-            margin: 8px 0;
-            font-size: 12px;
-        }
-
-        .macro-item {
-            text-align: center;
-            padding: 4px;
-            border-radius: 4px;
-            background: #f8f9fa;
-        }
-
-        .carbs { background: #e3f2fd; color: #1976d2; }
-        .protein { background: #e8f5e8; color: #388e3c; }
-        .fat { background: #fff3e0; color: #f57c00; }
-
-        .refeicao-info {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 12px;
-            color: #6c757d;
-            margin-top: 8px;
-        }
-
-        .insulina-info {
-            background: #dc3545;
-            color: white;
-            padding: 3px 8px;
-            border-radius: 10px;
-            font-weight: 600;
-        }
-
-        .refeicao-config {
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
-            background: #f8f9fa;
-        }
-
-        .input-grupo {
-            margin-bottom: 10px;
-        }
-
-        .input-grupo label {
-            display: block;
-            margin-bottom: 5px;
-            color: #333;
-            font-weight: 600;
-            font-size: 14px;
-        }
-
-        .input-grupo input, .input-grupo textarea {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-
-        .macros-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 10px;
-        }
-
-        .urgente {
-            border-left: 4px solid #dc3545;
-        }
-
-        .hoje {
-            border-left: 4px solid #ffc107;
-        }
-
-        /* Responsividade para iPhone */
-        @media (max-width: 380px) {
-            .container {
-                margin: 0;
-                border-radius: 0;
-                min-height: 100vh;
-            }
-            
-            .tab {
-                font-size: 11px;
-                padding: 12px 8px;
-            }
-        }
-
-        /* Estilo para modo escuro do iOS */
-        @media (prefers-color-scheme: dark) {
-            .container {
-                background: #1c1c1e;
-                color: white;
-            }
-            
-            .card {
-                background: #2c2c2e;
-                border-color: #3a3a3c;
-            }
-            
-            .tabs {
-                background: #2c2c2e;
-                border-color: #3a3a3c;
-            }
-            
-            .tab {
-                color: #8e8e93;
-            }
-            
-            .section-title {
-                color: white;
-            }
-        }
-    </style>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Central de Controle</title>
+  <style>
+    /* === Reset & Base === */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: sans-serif; background: #f0f2f5; color: #333; padding: 20px; }
+    h1 { text-align: center; margin-bottom: 20px; }
+    .card { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .form-inline { display: flex; gap: 8px; margin-bottom: 12px; }
+    .form-inline input, .form-inline select { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+    .form-inline button { padding: 8px 12px; border: none; border-radius: 4px; background: #007bff; color: #fff; cursor: pointer; }
+    .form-inline button:hover { background: #0056b3; }
+    .list { list-style: none; }
+    .list li { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #eee; }
+    .list li:last-child { border-bottom: none; }
+    .list li button { border: none; background: transparent; cursor: pointer; font-size: 1.1em; }
+    /* === Tabs === */
+    .tabs { display: flex; gap: 8px; justify-content: center; margin-bottom: 20px; }
+    .tab-btn { padding: 8px 16px; border: none; border-radius: 4px; background: #e0e0e0; cursor: pointer; }
+    .tab-btn.active { background: #007bff; color: #fff; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    /* === Subtabs (Rotina) === */
+    .subtabs { display: flex; gap: 8px; margin-bottom: 12px; }
+    .subtab-btn { padding: 6px 12px; border: none; border-radius: 4px; background: #e0e0e0; cursor: pointer; }
+    .subtab-btn.active { background: #17a2b8; color: #fff; }
+    .subtab-content { display: none; }
+    .subtab-content.active { display: block; }
+    /* === Financeiro Extras === */
+    .grid-2col { display: grid; grid-template-columns: repeat(2,1fr); gap: 10px; }
+    .fullwidth { grid-column: 1 / -1; }
+    .label { font-size: 12px; color: #666; }
+    .valor { font-size: 18px; font-weight: bold; margin-top: 4px; }
+    .barra-container { margin-top: 10px; }
+    .barra-bg { background: #e9ecef; border-radius: 8px; height: 8px; overflow: hidden; }
+    .barra-fill { height: 100%; width: 0; transition: width .3s ease; }
+    .finance-section { margin-top: 16px; }
+    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .finance-resumo { margin-bottom: 20px; }
+    .financeiro-btn { margin-bottom: 12px; }
+    /* === Modals === */
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
+    .modal.active { display: flex; }
+    .modal-content { background: #fff; padding: 20px; border-radius: 8px; width: 90%; max-width: 400px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+    .modal-content input { width: 100%; padding: 8px; margin-top: 8px; border: 1px solid #ccc; border-radius: 4px; }
+    .modal-content button { padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; }
+    .cancelBtn { background: #6c757d; color: #fff; }
+    .resetBtn { background: #dc3545; color: #fff; }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>Minha Rotina</h1>
-            <div class="date-info" id="dateInfo"></div>
-            <div id="alertaLembretes" style="margin-top: 10px; display: none;"></div>
+  <h1>Central de Controle</h1>
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="lembretes">Lembretes</button>
+    <button class="tab-btn" data-tab="rotina">Rotina</button>
+    <button class="tab-btn" data-tab="financeiro">Financeiro</button>
+  </nav>
+
+  <main>
+    <!-- Lembretes -->
+    <section id="lembretes" class="tab-content active">
+      <div class="card">
+        <h2>📌 Lembretes</h2>
+        <div class="form-inline">
+          <input type="text" id="inputLembrete" placeholder="Nova tarefa..."/>
+          <button id="btnAddLembrete">Adicionar</button>
         </div>
+        <ul id="listaLembretes" class="list"></ul>
+      </div>
+    </section>
 
-        <div class="tabs">
-            <button class="tab active" onclick="showTab('lembretes')">
-                📋 Lembretes
-            </button>
-            <button class="tab" onclick="showTab('rotina')">
-                💪 Rotina
-            </button>
-            <button class="tab" onclick="showTab('financeiro')">
-                💰 Financeiro
-            </button>
+    <!-- Rotina -->
+    <section id="rotina" class="tab-content">
+      <div class="card">
+        <h2>🗓️ Rotina</h2>
+        <nav class="subtabs">
+          <button class="subtab-btn active" data-sub="treinos">Treinos</button>
+          <button class="subtab-btn" data-sub="dieta">Dieta</button>
+        </nav>
+        <!-- Treinos -->
+        <div id="treinos" class="subtab-content active">
+          <div class="form-inline">
+            <select id="selDia">
+              <option value="Segunda">Segunda</option>
+              <option value="Terça">Terça</option>
+              <option value="Quarta">Quarta</option>
+              <option value="Quinta">Quinta</option>
+              <option value="Sexta">Sexta</option>
+              <option value="Sábado">Sábado</option>
+              <option value="Domingo">Domingo</option>
+            </select>
+            <input type="text" id="inputTreino" placeholder="Exercício..."/>
+            <button id="btnAddTreino">Adicionar</button>
+          </div>
+          <ul id="listaTreinos" class="list"></ul>
         </div>
+        <!-- Dieta -->
+        <div id="dieta" class="subtab-content">
+          <div class="form-inline">
+            <input type="time" id="inputHorarioDieta"/>
+            <input type="text" id="inputDieta" placeholder="Refeição..."/>
+            <button id="btnAddDieta">Adicionar</button>
+          </div>
+          <ul id="listaDieta" class="list"></ul>
+        </div>
+      </div>
+    </section>
 
-        <div class="content">
-            <!-- ABA LEMBRETES -->
-            <div id="lembretes" class="tab-content active">
-                <div class="section-title">Meus Lembretes</div>
-                
-                <!-- Formulário para adicionar lembrete -->
-                <div class="card" id="formLembrete" style="display: none;">
-                    <h3 style="margin-bottom: 15px; color: #4facfe;">➕ Novo Lembrete</h3>
-                    
-                    <div style="margin-bottom: 15px;">
-                        <label style="display: block; margin-bottom: 5px; color: #333; font-weight: 600;">Tarefa:</label>
-                        <input type="text" id="tarefaInput" placeholder="Ex: Consulta médica" 
-                               style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px;">
-                    </div>
-                    
-                    <div style="margin-bottom: 15px;">
-                        <label style="display: block; margin-bottom: 5px; color: #333; font-weight: 600;">Data:</label>
-                        <input type="date" id="dataInput" 
-                               style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px;">
-                    </div>
-                    
-                    <div style="margin-bottom: 20px;">
-                        <label style="display: block; margin-bottom: 5px; color: #333; font-weight: 600;">Horário:</label>
-                        <input type="time" id="horarioInput" 
-                               style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px;">
-                    </div>
-                    
-                    <div style="display: flex; gap: 10px;">
-                        <button class="btn" onclick="salvarLembrete()" style="flex: 1; background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-                            ✅ Salvar
-                        </button>
-                        <button class="btn" onclick="cancelarLembrete()" style="flex: 1; background: linear-gradient(135deg, #6c757d 0%, #495057 100%);">
-                            ❌ Cancelar
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Lista de lembretes -->
-                <div id="listaLembretes"></div>
-                
-                <!-- Estado vazio -->
-                <div class="empty-state" id="emptyState">
-                    <span class="icon">📝</span>
-                    <h3>Nenhum lembrete ainda</h3>
-                    <p>Adicione suas tarefas e organize seu dia!</p>
-                </div>
+    <!-- Financeiro -->
+    <section id="financeiro" class="tab-content">
+      <div class="card finance-resumo">
+        <h2>💰 Resumo do Mês</h2>
+        <div class="grid-2col">
+          <div>
+            <div class="label">Salário</div>
+            <div id="salarioDisplay" class="valor">R$ 0,00</div>
+          </div>
+          <div>
+            <div class="label">Gastos Fixos</div>
+            <div id="gastosFixosTotal" class="valor">R$ 0,00</div>
+          </div>
+          <div>
+            <div class="label">Renda Disponível</div>
+            <div id="rendaDisponivel" class="valor">R$ 0,00</div>
+          </div>
+          <div>
+            <div class="label">Gastos Variáveis</div>
+            <div id="gastosVariaveisTotal" class="valor">R$ 0,00</div>
+          </div>
+          <div class="fullwidth">
+            <div class="label">Saldo Final</div>
+            <div id="saldoFinal" class="valor">R$ 0,00</div>
+          </div>
+        </div>
+        <div class="barra-container">
+          <div class="barra-bg"><div id="barraGastos" class="barra-fill"></div></div>
+          <div id="percentualGasto" class="label">0% da renda disponível</div>
+        </div>
+      </div>
+      <button class="btn financeiro-btn" id="btnConfigSalario">💵 Configurar Salário</button>
+      <div id="modalSalario" class="modal">
+        <div class="modal-content">
+          <h3>💵 Salário Mensal</h3>
+          <input type="number" id="inputSalario" placeholder="Ex: 5000,00" step="0.01"/>
+          <div class="modal-actions">
+            <button id="salvarSalarioBtn">Salvar</button>
+            <button class="cancelBtn" id="cancelarSalarioBtn">Cancelar</button>
+          </div>
+        </div>
+      </div>
+      <div class="card finance-section">
+        <div class="section-header">
+          <h3>🏠 Gastos Fixos</h3>
+          <button id="btnAddFixo">+ Adicionar</button>
+        </div>
+        <ul id="listaFixos" class="list"></ul>
+      </div>
+      <div class="card finance-section">
+        <div class="section-header">
+          <h3>📝 Gastos Variáveis</h3>
+          <div>
+            <button id="btnAddVariavel">+ Adicionar</button>
+            <button class="resetBtn" id="btnResetVariaveis">Resetar</button>
+          </div>
+        </div>
+        <ul id="listaVariaveis" class="list"></ul>
+      </div>
+    </section>
+  </main>
 
-                <button class="btn" onclick="mostrarFormLembrete()">
-                    + Adicionar Lembrete
-                </button>
-            </div>
+  <!-- Modais Financeiro Fixos & Variáveis -->
+  <div id="modalFixo" class="modal">
+    <div class="modal-content">
+      <h3>🏠 Novo Gasto Fixo</h3>
+      <input type="text" id="descFixo" placeholder="Descrição"/>
+      <input type="number" id="valFixo" placeholder="Valor" step="0.01"/>
+      <div class="modal-actions">
+        <button id="salvarFixoBtn">Salvar</button>
+        <button class="cancelBtn" id="cancelarFixoBtn">Cancelar</button>
+      </div>
+    </div>
+  </div>
+  <div id="modalVariavel" class="modal">
+    <div class="modal-content">
+      <h3>📝 Novo Gasto Variável</h3>
+      <input type="text" id="descVariavel" placeholder="Descrição"/>
+      <input type="number" id="valVariavel" placeholder="Valor" step="0.01"/>
+      <input type="date" id="dataVariavel"/>
+      <div class="modal-actions">
+        <button id="salvarVariavelBtn">Salvar</button>
+        <button class="cancelBtn" id="cancelarVariavelBtn">Cancelar</button>
+      </div>
+    </div>
+  </div>
 
-            <!-- ABA ROTINA -->
-            <div id="rotina" class="tab-content">
-                <div class="section-title">Rotina de Hoje</div>
-                
-                <!-- Abas dentro da Rotina -->
-                <div style="display: flex; background: #f8f9fa; border-radius: 10px; padding: 4px; margin-bottom: 15px;">
-                    <button id="btnTreino" class="sub-tab active" onclick="mostrarSubAba('treino')">
-                        💪 Treino
-                    </button>
-                    <button id="btnRefeicoes" class="sub-tab" onclick="mostrarSubAba('refeicoes')">
-                        🍽️ Refeições
-                    </button>
-                </div>
-                
-                <!-- Resumo Nutricional -->
-                <div id="resumoNutricional" class="card" style="margin-bottom: 20px; display: none;">
-                    <h4 style="color: #28a745; margin: 0 0 15px 0; text-align: center;">📊 Resumo Nutricional do Dia</h4>
-                    <div id="conteudoResumo"></div>
-                </div>
-                
-                <!-- Conteúdo do Treino -->
-                <div id="subTreino" class="sub-content active">
-                    <div class="card">
-                        <div id="treinoHoje"></div>
-                    </div>
-                    <button class="btn" onclick="mostrarConfigTreinos()">
-                        ⚙️ Configurar Treinos
-                    </button>
-                </div>
-                
-                <!-- Conteúdo das Refeições -->
-                <div id="subRefeicoes" class="sub-content">
-                    <div class="card">
-                        <div id="refeicoesHoje"></div>
-                    </div>
-                    <button class="btn" onclick="mostrarConfigRefeicoes()" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-                        ⚙️ Configurar Refeições
-                    </button>
-                </div>
-                
-                <!-- Modal de Configuração de Treinos -->
-                <div id="modalTreinos" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000;">
-                    <div style="background: white; margin: 20px; border-radius: 15px; max-height: calc(100vh - 40px); overflow-y: auto;">
-                        <div style="padding: 20px; border-bottom: 1px solid #eee;">
-                            <h2 style="color: #4facfe; margin: 0;">⚙️ Configurar Treinos</h2>
-                        </div>
-                        
-                        <div style="padding: 20px;">
-                            <!-- Configuração dos dias da semana -->
-                            <h3 style="color: #333; margin-bottom: 15px;">📅 Dias da Semana</h3>
-                            <div id="diasSemana"></div>
-                            
-                            <!-- Configuração dos treinos -->
-                            <h3 style="color: #333; margin: 20px 0 15px 0;">💪 Seus Treinos</h3>
-                            <div id="listaTreinos"></div>
-                            
-                            <button class="btn" onclick="adicionarTreino()" style="margin: 15px 0; background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-                                + Adicionar Novo Treino
-                            </button>
-                            
-                            <div style="display: flex; gap: 10px; margin-top: 20px;">
-                                <button class="btn" onclick="salvarConfigTreinos()" style="flex: 1; background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-                                    ✅ Salvar
-                                </button>
-                                <button class="btn" onclick="fecharConfigTreinos()" style="flex: 1; background: linear-gradient(135deg, #6c757d 0%, #495057 100%);">
-                                    ❌ Fechar
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Modal de Configuração de Refeições -->
-                <div id="modalRefeicoes" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000;">
-                    <div style="background: white; margin: 20px; border-radius: 15px; max-height: calc(100vh - 40px); overflow-y: auto;">
-                        <div style="padding: 20px; border-bottom: 1px solid #eee;">
-                            <h2 style="color: #28a745; margin: 0;">🍽️ Configurar Refeições</h2>
-                        </div>
-                        
-                        <div style="padding: 20px;">
-                            <!-- Lista de refeições -->
-                            <div id="listaRefeicoes"></div>
-                            
-                            <button class="btn" onclick="adicionarRefeicao()" style="margin: 15px 0; background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-                                + Adicionar Nova Refeição
-                            </button>
-                            
-                            <div style="display: flex; gap: 10px; margin-top: 20px;">
-                                <button class="btn" onclick="salvarConfigRefeicoes()" style="flex: 1; background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-                                    ✅ Salvar
-                                </button>
-                                <button class="btn" onclick="fecharConfigRefeicoes()" style="flex: 1; background: linear-gradient(135deg, #6c757d 0%, #495057 100%);">
-                                    ❌ Fechar
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+  <script>
+  (function(){
+    // Helpers
+    const byId = id => document.getElementById(id);
+    const qs = sel => document.querySelector(sel);
+    const qsa = sel => Array.from(document.querySelectorAll(sel));
+    // --- Tabs ---
+    function initTabs(){
+      qsa('.tab-btn').forEach(btn=>{
+        btn.onclick = ()=>{
+          qsa('.tab-btn').forEach(b=>b.classList.remove('active'));
+          qsa('.tab-content').forEach(sec=>sec.classList.remove('active'));
+          btn.classList.add('active');
+          byId(btn.dataset.tab).classList.add('active');
+        };
+      });
+    }
+    // --- Reminders Module ---
+    const Reminders = {
+      key: 'lembretes',
+      items: [],
+      init(){
+        this.items = JSON.parse(localStorage.getItem(this.key)||'[]');
+        this.cache(); this.bind(); this.render();
+      },
+      cache(){
+        this.input = byId('inputLembrete');
+        this.list = byId('listaLembretes');
+        this.btn   = byId('btnAddLembrete');
+      },
+      bind(){
+        this.btn.onclick = ()=>{
+          const txt = this.input.value.trim();
+          if(!txt) return;
+          this.items.push({ id: Date.now(), text: txt });
+          this.input.value = '';
+          this.save(); this.render();
+        };
+      },
+      save(){
+        localStorage.setItem(this.key, JSON.stringify(this.items));
+      },
+      render(){
+        if(!this.items.length){
+          this.list.innerHTML = '<li>Sem lembretes</li>';
+        } else {
+          this.list.innerHTML = this.items.map(i=>
+            `<li>${i.text}<button data-id="${i.id}">🗑️</button></li>`
+          ).join('');
+          this.list.querySelectorAll('button').forEach(b=>{
+            b.onclick = ()=>{
+              this.items = this.items.filter(i=>i.id!=b.dataset.id);
+              this.save(); this.render();
+            };
+          });
+        }
+      }
+    };
+    // --- Routine Module ---
+    const Routine = {
+      keys: { treinos:'rotinaTreinos', dieta:'rotinaDieta' },
+      treinos: [], dieta: [],
+      init(){
+        this.load(); this.cache(); this.bind(); this.renderTabs();
+        this.renderTreinos(); this.renderDieta();
+      },
+      load(){
+        this.treinos = JSON.parse(localStorage.getItem(this.keys.treinos)||'[]');
+        this.dieta   = JSON.parse(localStorage.getItem(this.keys.dieta)||'[]');
+      },
+      save(itemKey){
+        localStorage.setItem(this.keys[itemKey], JSON.stringify(this[itemKey]));
+      },
+      cache(){
+        this.subBtns = qsa('.subtab-btn');
+        this.subContents = qsa('.subtab-content');
+        this.selDia = byId('selDia');
+        this.inputTreino = byId('inputTreino');
+        this.btnAddTreino = byId('btnAddTreino');
+        this.listTreinos = byId('listaTreinos');
+        this.inputHorarioDieta = byId('inputHorarioDieta');
+        this.inputDieta = byId('inputDieta');
+        this.btnAddDieta = byId('btnAddDieta');
+        this.listDieta = byId('listaDieta');
+      },
+      bind(){
+        this.btnAddTreino.onclick = ()=>{
+          const desc = this.inputTreino.value.trim();
+          const dia  = this.selDia.value;
+          if(!desc) return;
+          this.treinos.push({ id: Date.now(), dia, text: desc });
+          this.inputTreino.value = '';
+          this.save('treinos'); this.renderTreinos();
+        };
+        this.btnAddDieta.onclick = ()=>{
+          const desc = this.inputDieta.value.trim();
+          const hora = this.inputHorarioDieta.value;
+          if(!desc||!hora) return;
+          this.dieta.push({ id: Date.now(), hora, text: desc });
+          this.inputDieta.value = ''; this.inputHorarioDieta.value = '';
+          this.save('dieta'); this.renderDieta();
+        };
+      },
+      renderTabs(){
+        this.subBtns.forEach(btn=>{
+          btn.onclick = ()=>{
+            this.subBtns.forEach(b=>b.classList.remove('active'));
+            this.subContents.forEach(c=>c.classList.remove('active'));
+            btn.classList.add('active');
+            byId(btn.dataset.sub).classList.add('active');
+          };
+        });
+      },
+      renderTreinos(){
+        if(!this.treinos.length){
+          this.listTreinos.innerHTML = '<li>Sem treinos</li>';
+        } else {
+          this.listTreinos.innerHTML = this.treinos.map(t=>
+            `<li>[${t.dia}] ${t.text}<button data-id="${t.id}">🗑️</button></li>`
+          ).join('');
+          this.listTreinos.querySelectorAll('button').forEach(b=>{
+            b.onclick = ()=>{
+              this.treinos = this.treinos.filter(t=>t.id!=b.dataset.id);
+              this.save('treinos'); this.renderTreinos();
+            };
+          });
+        }
+      },
+      renderDieta(){
+        if(!this.dieta.length){
+          this.listDieta.innerHTML = '<li>Sem refeições</li>';
+        } else {
+          this.listDieta.innerHTML = this.dieta.map(d=>
+            `<li>[${d.hora}] ${d.text}<button data-id="${d.id}">🗑️</button></li>`
+          ).join('');
+          this.listDieta.querySelectorAll('button').forEach(b=>{
+            b.onclick = ()=>{
+              this.dieta = this.dieta.filter(d=>d.id!=b.dataset.id);
+              this.save('dieta'); this.renderDieta();
+            };
+          });
+        }
+      }
+    };
+    // --- Finance Module ---
+    const Finance = {
+      keys: {
+        config: 'configFinanceira',
+        fixos: 'gastosFixos',
+        variaveis: 'gastosVariaveis'
+      },
+      salario:0, fixos:[], variaveis:[], mesKey:'',
+      init(){
+        this.cache(); this.load();
+        const hoje = new Date();
+        this.mesKey = `${hoje.getMonth()+1}-${hoje.getFullYear()}`;
+        this.bind(); this.renderAll();
+      },
+      cache(){
+        this.display = {
+          salario: byId('salarioDisplay'),
+          fixosTotal: byId('gastosFixosTotal'),
+          disponivel: byId('rendaDisponivel'),
+          variaveisTotal: byId('gastosVariaveisTotal'),
+          saldo: byId('saldoFinal'),
+          barra: byId('barraGastos'),
+          pct: byId('percentualGasto')
+        };
+        // buttons & modals
+        this.btnConfigSalario = byId('btnConfigSalario');
+        this.modalSalario = byId('modalSalario');
+        this.inputSalario = byId('inputSalario');
+        this.btnSalvarSalario = byId('salvarSalarioBtn');
+        this.btnCancelarSalario = byId('cancelarSalarioBtn');
+        this.btnAddFixo = byId('btnAddFixo');
+        this.listaFixos = byId('listaFixos');
+        this.btnAddVariavel = byId('btnAddVariavel');
+        this.btnResetVariaveis = byId('btnResetVariaveis');
+        this.listaVariaveis = byId('listaVariaveis');
+        this.modalFixo = byId('modalFixo');
+        this.descFixo = byId('descFixo');
+        this.valFixo = byId('valFixo');
+        this.btnSalvarFixo = byId('salvarFixoBtn');
+        this.btnCancelarFixo = byId('cancelarFixoBtn');
+        this.modalVariavel = byId('modalVariavel');
+        this.descVariavel = byId('descVariavel');
+        this.valVariavel = byId('valVariavel');
+        this.dataVariavel = byId('dataVariavel');
+        this.btnSalvarVariavel = byId('salvarVariavelBtn');
+        this.btnCancelarVariavel = byId('cancelarVariavelBtn');
+      },
+      bind(){
+        // Salário modal
+        this.btnConfigSalario.onclick = ()=> this.modalSalario.classList.add('active');
+        this.btnCancelarSalario.onclick = ()=> this.modalSalario.classList.remove('active');
+        this.btnSalvarSalario.onclick = ()=>{
+          const v = parseFloat(this.inputSalario.value) || 0;
+          if(v>0){ this.salario=v; this.saveConfig(); this.modalSalario.classList.remove('active'); this.renderResumo(); }
+          else alert('Valor inválido');
+        };
+        // Gastos Fixos modal
+        this.btnAddFixo.onclick = ()=> this.modalFixo.classList.add('active');
+        this.btnCancelarFixo.onclick = ()=> this.modalFixo.classList.remove('active');
+        this.btnSalvarFixo.onclick = ()=>{
+          const d = this.descFixo.value.trim();
+          const v = parseFloat(this.valFixo.value)||0;
+          if(d&&v>0){
+            this.fixos.push({ id: Date.now(), descricao:d, valor:v });
+            this.saveFixos(); this.modalFixo.classList.remove('active');
+            this.descFixo.value=''; this.valFixo.value='';
+            this.renderFixos(); this.renderResumo();
+          }
+        };
+        // Gastos Variáveis modal
+        this.btnAddVariavel.onclick = ()=> this.modalVariavel.classList.add('active');
+        this.btnCancelarVariavel.onclick = ()=> this.modalVariavel.classList.remove('active');
+        this.btnSalvarVariavel.onclick = ()=>{
+          const d = this.descVariavel.value.trim();
+          const v = parseFloat(this.valVariavel.value)||0;
+          const dt= this.dataVariavel.value;
+          if(d&&v>0&&dt){
+            this.variaveis.push({ id:Date.now(), descricao:d, valor:v, data:dt, mes:this.mesKey });
+            this.saveVariaveis(); this.modalVariavel.classList.remove('active');
+            this.descVariavel.value=''; this.valVariavel.value=''; this.dataVariavel.value='';
+            this.renderVariaveis(); this.renderResumo();
+          }
+        };
+        // Reset variáveis
+        this.btnResetVariaveis.onclick = ()=>{
+          if(confirm('Resetar gastos variáveis do mês?')){
+            this.variaveis = this.variaveis.filter(x=>x.mes!==this.mesKey);
+            this.saveVariaveis(); this.renderVariaveis(); this.renderResumo();
+          }
+        };
+      },
+      load(){
+        const cfg = JSON.parse(localStorage.getItem(this.keys.config)||'{}');
+        this.salario = cfg.salario||0;
+        this.fixos = JSON.parse(localStorage.getItem(this.keys.fixos)||'[]');
+        this.variaveis = JSON.parse(localStorage.getItem(this.keys.variaveis)||'[]');
+      },
+      saveConfig(){
+        localStorage.setItem(this.keys.config, JSON.stringify({ salario: this.salario }));
+      },
+      saveFixos(){
+        localStorage.setItem(this.keys.fixos, JSON.stringify(this.fixos));
+      },
+      saveVariaveis(){
+        localStorage.setItem(this.keys.variaveis, JSON.stringify(this.variaveis));
+      },
+      fm(v){ return 'R$ ' + v.toFixed(2).replace('.', ','); },
+      renderResumo(){
+        const totalFixos = this.fixos.reduce((s,x)=>s+x.valor,0);
+        const gastVari = this.variaveis.filter(x=>x.mes===this.mesKey).reduce((s,x)=>s+x.valor,0);
+        const rendaDisp = this.salario - totalFixos;
+        const saldoFinal = rendaDisp - gastVari;
+        const pct = rendaDisp>0?Math.min(100,(gastVari/rendaDisp)*100):0;
+        this.display.salario.textContent = this.fm(this.salario);
+        this.display.fixosTotal.textContent = this.fm(totalFixos);
+        this.display.disponivel.textContent = this.fm(rendaDisp);
+        this.display.variaveisTotal.textContent = this.fm(gastVari);
+        this.display.saldo.textContent = (saldoFinal>=0?'+':'') + this.fm(saldoFinal);
+        this.display.barra.style.width = pct + '%';
+        this.display.barra.style.background = pct<=50?'#28a745':pct<=80?'#ffc107':'#dc3545';
+        this.display.pct.textContent = pct.toFixed(1) + '% da renda disponível';
+      },
+      renderFixos(){
+        if(!this.fixos.length){
+          this.listaFixos.innerHTML = '<li>Sem gastos fixos</li>';
+        } else {
+          this.listaFixos.innerHTML = this.fixos.map(f=>
+            `<li>${f.descricao}<span>${this.fm(f.valor)}</span><button data-id="${f.id}">🗑️</button></li>`
+          ).join('');
+          this.listaFixos.querySelectorAll('button').forEach(b=>{
+            b.onclick = ()=>{
+              if(!confirm('Excluir gasto fixo?')) return;
+              this.fixos = this.fixos.filter(x=>x.id!=b.dataset.id);
+              this.saveFixos(); this.renderFixos(); this.renderResumo();
+            };
+          });
+        }
+      },
+      renderVariaveis(){
+        const lista = this.variaveis.filter(x=>x.mes===this.mesKey);
+        if(!lista.length){
+          this.listaVariaveis.innerHTML = '<li>Sem gastos variáveis</li>';
+        } else {
+          this.listaVariaveis.innerHTML = lista.map(v=>{
+            const d = new Date(v.data).toLocaleDateString('pt-BR');
+            return `<li>${v.descricao} (${d})<span>${this.fm(v.valor)}</span><button data-id="${v.id}">🗑️</button></li>`;
+          }).join('');
+          this.listaVariaveis.querySelectorAll('button').forEach(b=>{
+            b.onclick = ()=>{
+              if(!confirm('Excluir gasto variável?')) return;
+              this.variaveis = this.variaveis.filter(x=>x.id!=b.dataset.id);
+              this.saveVariaveis(); this.renderVariaveis(); this.renderResumo();
+            };
+          });
+        }
+      },
+      renderAll(){
+        this.renderResumo();
+        this.renderFixos();
+        this.renderVariaveis();
+      }
+    };
 
-            <!-- ABA FINANCEIRO -->
-            <div id="financeiro" class="tab-content">
-                <div class="section-title">Controle Financeiro</div>
-                
-                <!-- Resumo do Mês -->
-                <div class="card">
-                    <h3 style="margin-bottom: 15px; color: #4facfe; text-align: center;">💰 Resumo do Mês</h3>
-                    <div id="saldoDisponivel"></div>
-                    <div id="progressoGastos" style="margin-top: 15px;"></div>
-                </div>
-                
-                <!-- Configuração de Salário -->
-                <div class="card" id="configSalario" style="display: none;">
-                    <h4 style="color: #28a745; margin: 0 0 15px 0;">💵 Configurar Salário</h4>
-                    
-                    <div class="input-grupo">
-                        <label>Salário Mensal:</label>
-                        <input type="number" id="salarioInput" placeholder="Ex: 5000" step="0.01">
-                    </div>
-                    
-                    <div style="display: flex; gap: 10px; margin-top: 15px;">
-                        <button class="btn" onclick="salvarSalario()" style="flex: 1; background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-                            ✅ Salvar
-                        </button>
-                        <button class="btn" onclick="cancelarConfigSalario()" style="flex: 1; background: linear-gradient(135deg, #6c757d 0%, #495057 100%);">
-                            ❌ Cancelar
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Gastos Fixos -->
-                <div class="card">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <h4 style="color: #
+    // Init
+    document.addEventListener('DOMContentLoaded', ()=>{
+      initTabs();
+      Reminders.init();
+      Routine.init();
+      Finance.init();
+    });
+  })();
+  </script>
+</body>
+</html>
