@@ -1,4 +1,1133 @@
-<!DOCTYPE html>
+<!-- Gastos Fixos -->
+                <div class="card">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div class="input-grupo">
+                            <label>Calorias:</label>
+                            <input type="number" value="${refeicao.calorias}" onchange="atualizarRefeicao('${refeicao.id}', 'calorias', this.value)">
+                        </div>
+                        <div class="input-grupo">
+                            <label>Carboidratos por UI:</label>
+                            <input type="number" value="${refeicao.insulinaPorCarb || 10}" onchange="atualizarRefeicao('${refeicao.id}', 'insulinaPorCarb', this.value)" step="0.1" min="0.1">
+                        </div>
+                    </div>
+                    
+                    <div style="background: #e3f2fd; padding: 8px; border-radius: 4px; margin-top: 10px; text-align: center;">
+                        <strong style="color: #1976d2;">Insulina: ${calcularInsulina(refeicao.carboidratos, refeicao.insulinaPorCarb || 10)} unidade${calcularInsulina(refeicao.carboidratos, refeicao.insulinaPorCarb || 10) !== 1 ? 's' : ''}</strong>
+                        <br><small style="color: #666;">1 unidade para cada ${refeicao.insulinaPorCarb || 10}g de carboidrato</small>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function adicionarRefeicao() {
+            const novaRefeicao = {
+                id: Date.now().toString(),
+                nome: '',
+                horario: '08:00',
+                alimentos: '',
+                carboidratos: 0,
+                proteinas: 0,
+                gorduras: 0,
+                calorias: 0,
+                insulinaPorCarb: 10
+            };
+
+            refeicoes.push(novaRefeicao);
+            carregarConfigRefeicoes();
+        }
+
+        function excluirRefeicao(id) {
+            if (confirm('Tem certeza que deseja excluir esta refeição?')) {
+                refeicoes = refeicoes.filter(r => r.id !== id);
+                carregarConfigRefeicoes();
+            }
+        }
+
+        function atualizarRefeicao(id, campo, valor) {
+            const refeicao = refeicoes.find(r => r.id === id);
+            if (refeicao) {
+                refeicao[campo] = valor;
+                // Recarregar para atualizar o cálculo de insulina
+                if (campo === 'carboidratos' || campo === 'insulinaPorCarb') {
+                    carregarConfigRefeicoes();
+                }
+            }
+        }
+
+        function salvarConfigRefeicoes() {
+            localStorage.setItem('refeicoes', JSON.stringify(refeicoes));
+            fecharConfigRefeicoes();
+            atualizarRefeicoesHoje();
+            atualizarResumoNutricional();
+            alert('Refeições salvas com sucesso!');
+        }
+
+        function atualizarRefeicoesHoje() {
+            const refeicoesDiv = document.getElementById('refeicoesHoje');
+            
+            if (refeicoes.length === 0) {
+                refeicoesDiv.innerHTML = `
+                    <div class="empty-state">
+                        <span class="icon">🥗</span>
+                        <h3>Configure suas refeições</h3>
+                        <p>Defina seus horários e cardápio diário</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Ordenar por horário
+            const refeicoesOrdenadas = refeicoes.sort((a, b) => {
+                return a.horario.localeCompare(b.horario);
+            });
+            
+            const agora = new Date();
+            const horaAtual = agora.getHours() * 60 + agora.getMinutes();
+            
+            refeicoesDiv.innerHTML = refeicoesOrdenadas.map(refeicao => {
+                const [hora, minuto] = refeicao.horario.split(':').map(Number);
+                const horarioRefeicao = hora * 60 + minuto;
+                const insulina = calcularInsulina(refeicao.carboidratos, refeicao.insulinaPorCarb || 10);
+                
+                // Determinar se é próxima refeição (próxima 30 min)
+                const isProxima = horarioRefeicao > horaAtual && horarioRefeicao <= horaAtual + 30;
+                const isPendente = horarioRefeicao > horaAtual;
+                
+                return `
+                    <div class="refeicao-item ${isProxima ? 'hoje' : ''}">
+                        <div class="refeicao-header">
+                            <div class="refeicao-nome">
+                                ${refeicao.nome}
+                                ${isProxima ? ' 🔔' : ''}
+                                ${!isPendente ? ' ✅' : ''}
+                            </div>
+                            <div class="refeicao-horario">${refeicao.horario}</div>
+                        </div>
+                        
+                        <div style="font-size: 12px; color: #666; margin-bottom: 8px; white-space: pre-line;">
+                            ${refeicao.alimentos}
+                        </div>
+                        
+                        <div class="refeicao-macros">
+                            <div class="macro-item carbs">
+                                <div>Carbs</div>
+                                <strong>${refeicao.carboidratos}g</strong>
+                            </div>
+                            <div class="macro-item protein">
+                                <div>Prot</div>
+                                <strong>${refeicao.proteinas}g</strong>
+                            </div>
+                            <div class="macro-item fat">
+                                <div>Gord</div>
+                                <strong>${refeicao.gorduras}g</strong>
+                            </div>
+                        </div>
+                        
+                        <div class="refeicao-info">
+                            <span>🔥 ${refeicao.calorias} kcal</span>
+                            <div class="insulina-info">💉 ${insulina} unidade${insulina !== 1 ? 's' : ''}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            // Atualizar resumo se estivermos na aba de refeições
+            const btnRefeicoes = document.getElementById('btnRefeicoes');
+            if (btnRefeicoes && btnRefeicoes.classList.contains('active')) {
+                atualizarResumoNutricional();
+            }
+        }
+
+        // FUNÇÕES FINANCEIRAS
+        let configFinanceira = JSON.parse(localStorage.getItem('configFinanceira')) || { salario: 0 };
+        let gastosFixos = JSON.parse(localStorage.getItem('gastosFixos')) || [];
+        let gastosVariaveis = JSON.parse(localStorage.getItem('gastosVariaveis')) || [];
+        let mesAtual = new Date().getMonth() + '-' + new Date().getFullYear();
+
+        function mostrarConfigSalario() {
+            document.getElementById('configSalario').style.display = 'block';
+            document.getElementById('salarioInput').value = configFinanceira.salario || '';
+        }
+
+        function cancelarConfigSalario() {
+            document.getElementById('configSalario').style.display = 'none';
+        }
+
+        function salvarSalario() {
+            const salario = parseFloat(document.getElementById('salarioInput').value) || 0;
+            
+            if (salario <= 0) {
+                alert('Por favor, insira um salário válido!');
+                return;
+            }
+            
+            configFinanceira.salario = salario;
+            localStorage.setItem('configFinanceira', JSON.stringify(configFinanceira));
+            
+            cancelarConfigSalario();
+            atualizarResumoFinanceiro();
+            alert('Salário atualizado com sucesso!');
+        }
+
+        function mostrarFormGastoFixo() {
+            document.getElementById('modalGastoFixo').style.display = 'block';
+        }
+
+        function fecharFormGastoFixo() {
+            document.getElementById('modalGastoFixo').style.display = 'none';
+            document.getElementById('descricaoGastoFixo').value = '';
+            document.getElementById('valorGastoFixo').value = '';
+        }
+
+        function salvarGastoFixo() {
+            const descricao = document.getElementById('descricaoGastoFixo').value.trim();
+            const valor = parseFloat(document.getElementById('valorGastoFixo').value);
+            
+            if (!descricao) {
+                alert('Por favor, digite a descrição do gasto fixo!');
+                return;
+            }
+            
+            if (!valor || valor <= 0) {
+                alert('Por favor, digite um valor válido!');
+                return;
+            }
+            
+            const novoGastoFixo = {
+                id: Date.now(),
+                descricao,
+                valor
+            };
+            
+            gastosFixos.push(novoGastoFixo);
+            localStorage.setItem('gastosFixos', JSON.stringify(gastosFixos));
+            
+            fecharFormGastoFixo();
+            atualizarGastosFixos();
+            atualizarResumoFinanceiro();
+        }
+
+        function excluirGastoFixo(id) {
+            if (confirm('Tem certeza que deseja excluir este gasto fixo?')) {
+                gastosFixos = gastosFixos.filter(g => g.id !== id);
+                localStorage.setItem('gastosFixos', JSON.stringify(gastosFixos));
+                atualizarGastosFixos();
+                atualizarResumoFinanceiro();
+            }
+        }
+
+        function toggleGastosFixos() {
+            const lista = document.getElementById('listaGastosFixos');
+            const icon = document.getElementById('iconGastosFixos');
+            
+            if (lista.style.display === 'none') {
+                lista.style.display = 'block';
+                icon.textContent = '▲';
+            } else {
+                lista.style.display = 'none';
+                icon.textContent = '▼';
+            }
+        }
+
+        function mostrarFormGastoVariavel() {
+            document.getElementById('modalGastoVariavel').style.display = 'block';
+            document.getElementById('dataGastoVariavel').value = new Date().toISOString().split('T')[0];
+        }
+
+        function fecharFormGastoVariavel() {
+            document.getElementById('modalGastoVariavel').style.display = 'none';
+            document.getElementById('descricaoGastoVariavel').value = '';
+            document.getElementById('valorGastoVariavel').value = '';
+            document.getElementById('dataGastoVariavel').value = '';
+        }
+
+        function salvarGastoVariavel() {
+            const descricao = document.getElementById('descricaoGastoVariavel').value.trim();
+            const valor = parseFloat(document.getElementById('valorGastoVariavel').value);
+            const data = document.getElementById('dataGastoVariavel').value;
+            
+            if (!descricao) {
+                alert('Por favor, digite a descrição do gasto!');
+                return;
+            }
+            
+            if (!valor || valor <= 0) {
+                alert('Por favor, digite um valor válido!');
+                return;
+            }
+            
+            if (!data) {
+                alert('Por favor, selecione a data!');
+                return;
+            }
+            
+            const novoGasto = {
+                id: Date.now(),
+                descricao,
+                valor,
+                data,
+                mes: mesAtual
+            };
+            
+            gastosVariaveis.push(novoGasto);
+            localStorage.setItem('gastosVariaveis', JSON.stringify(gastosVariaveis));
+            
+            fecharFormGastoVariavel();
+            atualizarListaGastosVariaveis();
+            atualizarResumoFinanceiro();
+        }
+
+        function excluirGastoVariavel(id) {
+            if (confirm('Tem certeza que deseja excluir este gasto?')) {
+                gastosVariaveis = gastosVariaveis.filter(g => g.id !== id);
+                localStorage.setItem('gastosVariaveis', JSON.stringify(gastosVariaveis));
+                atualizarListaGastosVariaveis();
+                atualizarResumoFinanceiro();
+            }
+        }
+
+        function resetarGastosVariaveis() {
+            if (confirm('Tem certeza que deseja resetar todos os gastos variáveis do mês? Esta ação não pode ser desfeita!')) {
+                gastosVariaveis = gastosVariaveis.filter(g => g.mes !== mesAtual);
+                localStorage.setItem('gastosVariaveis', JSON.stringify(gastosVariaveis));
+                
+                atualizarListaGastosVariaveis();
+                atualizarResumoFinanceiro();
+                alert('Gastos variáveis resetados com sucesso!');
+            }
+        }
+
+        function atualizarGastosFixos() {
+            const resumoDiv = document.getElementById('resumoGastosFixos');
+            const listaDiv = document.getElementById('listaGastosFixos');
+            
+            const totalGastosFixos = gastosFixos.reduce((total, gasto) => total + gasto.valor, 0);
+            
+            resumoDiv.innerHTML = `
+                <div class="total-gastos-fixos">
+                    Total: R$ ${totalGastosFixos.toFixed(2).replace('.', ',')}
+                </div>
+            `;
+            
+            if (gastosFixos.length === 0) {
+                listaDiv.innerHTML = `
+                    <div style="text-align: center; color: #6c757d; padding: 15px;">
+                        <p>Nenhum gasto fixo cadastrado</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            listaDiv.innerHTML = gastosFixos.map(gasto => `
+                <div class="gasto-fixo-item">
+                    <div class="gasto-info">
+                        <div class="gasto-descricao">${gasto.descricao}</div>
+                        <div class="gasto-data">Mensal</div>
+                    </div>
+                    <div class="gasto-valor">R$ ${gasto.valor.toFixed(2).replace('.', ',')}</div>
+                    <button class="btn-excluir" onclick="excluirGastoFixo(${gasto.id})">🗑️</button>
+                </div>
+            `).join('');
+        }
+
+        function atualizarListaGastosVariaveis() {
+            const listaDiv = document.getElementById('listaGastosVariaveis');
+            const gastosDoMes = gastosVariaveis.filter(g => g.mes === mesAtual);
+            
+            if (gastosDoMes.length === 0) {
+                listaDiv.innerHTML = `
+                    <div style="text-align: center; color: #6c757d; padding: 15px;">
+                        <p>Nenhum gasto registrado este mês</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            const gastosOrdenados = gastosDoMes.sort((a, b) => new Date(b.data) - new Date(a.data));
+            
+            listaDiv.innerHTML = gastosOrdenados.map(gasto => {
+                const dataFormatada = new Date(gasto.data).toLocaleDateString('pt-BR');
+                
+                return `
+                    <div class="gasto-variavel-item">
+                        <div class="gasto-info">
+                            <div class="gasto-descricao">${gasto.descricao}</div>
+                            <div class="gasto-data">${dataFormatada}</div>
+                        </div>
+                        <div class="gasto-valor">R$ ${gasto.valor.toFixed(2).replace('.', ',')}</div>
+                        <button class="btn-excluir" onclick="excluirGastoVariavel(${gasto.id})">🗑️</button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function atualizarResumoFinanceiro() {
+            const saldoDiv = document.getElementById('saldoDisponivel');
+            const progressoDiv = document.getElementById('progressoGastos');
+            
+            const salario = configFinanceira.salario || 0;
+            const totalGastosFixos = gastosFixos.reduce((total, gasto) => total + gasto.valor, 0);
+            const gastosDoMes = gastosVariaveis
+                .filter(g => g.mes === mesAtual)
+                .reduce((total, gasto) => total + gasto.valor, 0);
+            
+            const rendaDisponivel = salario - totalGastosFixos;
+            const saldoFinal = rendaDisponivel - gastosDoMes;
+            const percentualGasto = rendaDisponivel > 0 ? (gastosDoMes / rendaDisponivel) * 100 : 0;
+            
+            if (salario === 0) {
+                saldoDiv.innerHTML = `
+                    <div class="empty-state">
+                        <span class="icon">⚙️</span>
+                        <h3>Configure seu salário</h3>
+                        <p>Clique no botão "Salário" para começar</p>
+                    </div>
+                `;
+                progressoDiv.innerHTML = '';
+                return;
+            }
+            
+            const isPositivo = saldoFinal >= 0;
+            
+            saldoDiv.innerHTML = `
+                <div class="saldo-principal">
+                    <div class="saldo-valor">R$ ${salario.toFixed(2).replace('.', ',')}</div>
+                    <div class="saldo-label">Salário Mensal</div>
+                </div>
+                
+                <div class="resumo-grid">
+                    <div class="resumo-item">
+                        <span class="valor" style="color: #ffc107;">R$ ${totalGastosFixos.toFixed(2).replace('.', ',')}</span>
+                        <span class="label">Gastos Fixos</span>
+                    </div>
+                    <div class="resumo-item">
+                        <span class="valor" style="color: #28a745;">R$ ${rendaDisponivel.toFixed(2).replace('.', ',')}</span>
+                        <span class="label">Renda Disponível</span>
+                    </div>
+                    <div class="resumo-item">
+                        <span class="valor" style="color: #dc3545;">R$ ${gastosDoMes.toFixed(2).replace('.', ',')}</span>
+                        <span class="label">Gastos do Mês</span>
+                    </div>
+                    <div class="resumo-item">
+                        <span class="valor" style="color: ${isPositivo ? '#28a745' : '#dc3545'};">
+                            ${saldoFinal >= 0 ? '+' : ''}R$ ${saldoFinal.toFixed(2).replace('.', ',')}
+                        </span>
+                        <span class="label">Saldo Final</span>
+                    </div>
+                </div>
+            `;
+            
+            // Barra de progresso dos gastos
+            const corBarra = percentualGasto <= 50 ? '#28a745' : 
+                            percentualGasto <= 80 ? '#ffc107' : '#dc3545';
+            
+            progressoDiv.innerHTML = `
+                <div style="margin-top: 15px;">
+                    <div class="progresso-info">
+                        <strong>Gastos Variáveis</strong>
+                        <strong>${percentualGasto.toFixed(1)}% da renda disponível</strong>
+                    </div>
+                    <div class="progresso-container">
+                        <div class="progresso-barra" style="width: ${Math.min(percentualGasto, 100)}%; background: ${corBarra};"></div>
+                    </div>
+                    <div style="font-size: 12px; color: #6c757d; text-align: center; margin-top: 5px;">
+                        R$ ${gastosDoMes.toFixed(2).replace('.', ',')} de R$ ${rendaDisponivel.toFixed(2).replace('.', ',')} disponíveis
+                    </div>
+                </div>
+            `;
+        }
+
+        function salvarCarga(chaveHistorico) {
+            const input = document.getElementById(`carga-${chaveHistorico}`);
+            const carga = input.value;
+            
+            if (carga) {
+                historicoCargas[chaveHistorico] = carga;
+                localStorage.setItem('historicoCargas', JSON.stringify(historicoCargas));
+                input.value = '';
+                atualizarTreinoHoje();
+            }
+        }
+
+        function verificarLembretesUrgentes() {
+            const agora = new Date();
+            const hoje = agora.toISOString().split('T')[0];
+            const horaAtual = agora.getHours() * 60 + agora.getMinutes();
+            
+            const atrasados = lembretes.filter(l => {
+                if (l.concluido) return false;
+                
+                const dataLembrete = new Date(l.data + ' ' + l.horario);
+                return dataLembrete < agora;
+            });
+            
+            const hojeRestante = lembretes.filter(l => {
+                if (l.concluido || l.data !== hoje) return false;
+                
+                const [hora, minuto] = l.horario.split(':').map(Number);
+                const horarioLembrete = hora * 60 + minuto;
+                return horarioLembrete > horaAtual;
+            });
+            
+            const alertaDiv = document.getElementById('alertaLembretes');
+            
+            if (atrasados.length > 0) {
+                alertaDiv.innerHTML = `
+                    <div class="alerta-lembretes">
+                        🚨 ${atrasados.length} tarefa${atrasados.length > 1 ? 's' : ''} atrasada${atrasados.length > 1 ? 's' : ''}!
+                    </div>
+                `;
+                alertaDiv.style.display = 'block';
+            } else if (hojeRestante.length > 0) {
+                alertaDiv.innerHTML = `
+                    <div class="alerta-lembretes alerta-hoje">
+                        📅 ${hojeRestante.length} tarefa${hojeRestante.length > 1 ? 's' : ''} para hoje
+                    </div>
+                `;
+                alertaDiv.style.display = 'block';
+            } else {
+                alertaDiv.style.display = 'none';
+            }
+        }
+
+        function agendarNotificacao(lembrete) {
+            // Manter a função original por compatibilidade
+            // mas focar nos alertas visuais
+            if ('Notification' in window && Notification.permission === 'granted') {
+                const dataNotificacao = new Date(lembrete.data + ' ' + lembrete.horario);
+                const agora = new Date();
+                const tempoAteNotificacao = dataNotificacao.getTime() - agora.getTime();
+                
+                if (tempoAteNotificacao > 0 && tempoAteNotificacao < 24 * 60 * 60 * 1000) { // Só até 24h
+                    setTimeout(() => {
+                        new Notification('🔔 Lembrete!', {
+                            body: lembrete.tarefa,
+                            icon: '📋',
+                            tag: 'lembrete-' + lembrete.id
+                        });
+                    }, tempoAteNotificacao);
+                }
+            }
+        }
+
+        // Inicializar app
+        document.addEventListener('DOMContentLoaded', function() {
+            updateDate();
+            atualizarListaLembretes();
+            verificarLembretesUrgentes();
+            atualizarTreinoHoje();
+            atualizarRefeicoesHoje();
+            atualizarGastosFixos();
+            atualizarListaGastosVariaveis();
+            atualizarResumoFinanceiro();
+            
+            // Solicitar permissão para notificações
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission().then(permission => {
+                    if (permission === 'granted') {
+                        console.log('Notificações permitidas!');
+                    }
+                });
+            }
+        });
+
+        // Atualizar verificações periodicamente
+        setInterval(() => {
+            updateDate();
+            verificarLembretesUrgentes();
+        }, 60000);
+    </script>
+</body>
+</html>="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h4 style="color: #ffc107; margin: 0; cursor: pointer;" onclick="toggleGastosFixos()">
+                            🏠 Gastos Fixos <span id="iconGastosFixos">▼</span>
+                        </h4>
+                        <button onclick="mostrarFormGastoFixo()" style="background: #ffc107; color: #333; border: none; padding: 6px 12px; border-radius: 15px; font-size: 12px; font-weight: 600;">+ Adicionar</button>
+                    </div>
+                    <div id="resumoGastosFixos"></div>
+                    <div id="listaGastosFixos" style="display: none;"></div>
+                </div>
+                
+                <!-- Gastos Variáveis -->
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h4 style="color: #dc3545; margin: 0;">📝 Gastos do Mês</h4>
+                        <button onclick="mostrarFormGastoVariavel()" style="background: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 15px; font-size: 12px; font-weight: 600;">+ Adicionar</button>
+                    </div>
+                    <div id="listaGastosVariaveis"></div>
+                </div>
+                
+                <!-- Botões de Ação -->
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="btn" onclick="mostrarConfigSalario()" style="flex: 1; background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                        💵 Salário
+                    </button>
+                    <button class="btn" onclick="resetarGastosVariaveis()" style="flex: 1; background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);">
+                        🔄 Resetar Gastos
+                    </button>
+                </div>
+                
+                <!-- Modal para Gasto Fixo -->
+                <div id="modalGastoFixo" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000;">
+                    <div style="background: white; margin: 50px 20px; border-radius: 15px; padding: 20px;">
+                        <h3 style="color: #ffc107; margin: 0 0 20px 0; text-align: center;">🏠 Adicionar Gasto Fixo</h3>
+                        
+                        <div class="input-grupo">
+                            <label>Descrição:</label>
+                            <input type="text" id="descricaoGastoFixo" placeholder="Ex: Academia, Netflix">
+                        </div>
+                        
+                        <div class="input-grupo">
+                            <label>Valor Mensal:</label>
+                            <input type="number" id="valorGastoFixo" placeholder="Ex: 150.00" step="0.01">
+                        </div>
+                        
+                        <div style="display: flex; gap: 10px; margin-top: 20px;">
+                            <button class="btn" onclick="salvarGastoFixo()" style="flex: 1; background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                                ✅ Salvar
+                            </button>
+                            <button class="btn" onclick="fecharFormGastoFixo()" style="flex: 1; background: linear-gradient(135deg, #6c757d 0%, #495057 100%);">
+                                ❌ Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Modal para Gasto Variável -->
+                <div id="modalGastoVariavel" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000;">
+                    <div style="background: white; margin: 50px 20px; border-radius: 15px; padding: 20px;">
+                        <h3 style="color: #dc3545; margin: 0 0 20px 0; text-align: center;">📝 Adicionar Gasto</h3>
+                        
+                        <div class="input-grupo">
+                            <label>Descrição:</label>
+                            <input type="text" id="descricaoGastoVariavel" placeholder="Ex: Supermercado, Gasolina">
+                        </div>
+                        
+                        <div class="input-grupo">
+                            <label>Valor:</label>
+                            <input type="number" id="valorGastoVariavel" placeholder="Ex: 150.00" step="0.01">
+                        </div>
+                        
+                        <div class="input-grupo">
+                            <label>Data:</label>
+                            <input type="date" id="dataGastoVariavel">
+                        </div>
+                        
+                        <div style="display: flex; gap: 10px; margin-top: 20px;">
+                            <button class="btn" onclick="salvarGastoVariavel()" style="flex: 1; background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                                ✅ Salvar
+                            </button>
+                            <button class="btn" onclick="fecharFormGastoVariavel()" style="flex: 1; background: linear-gradient(135deg, #6c757d 0%, #495057 100%);">
+                                ❌ Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Função para mostrar a data atual
+        function updateDate() {
+            const now = new Date();
+            const options = { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            };
+            const dateString = now.toLocaleDateString('pt-BR', options);
+            document.getElementById('dateInfo').textContent = dateString;
+        }
+
+        // Função para trocar entre abas
+        function showTab(tabName) {
+            // Remover classe active de todas as abas
+            const tabs = document.querySelectorAll('.tab');
+            const contents = document.querySelectorAll('.tab-content');
+            
+            tabs.forEach(tab => tab.classList.remove('active'));
+            contents.forEach(content => content.classList.remove('active'));
+            
+            // Adicionar classe active na aba selecionada
+            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+        }
+
+        // FUNÇÕES DOS LEMBRETES
+        let lembretes = JSON.parse(localStorage.getItem('lembretes')) || [];
+
+        function mostrarFormLembrete() {
+            document.getElementById('formLembrete').style.display = 'block';
+            document.getElementById('emptyState').style.display = 'none';
+            
+            // Definir data padrão como hoje
+            const hoje = new Date().toISOString().split('T')[0];
+            document.getElementById('dataInput').value = hoje;
+        }
+
+        function cancelarLembrete() {
+            document.getElementById('formLembrete').style.display = 'none';
+            document.getElementById('tarefaInput').value = '';
+            document.getElementById('dataInput').value = '';
+            document.getElementById('horarioInput').value = '';
+            atualizarListaLembretes();
+        }
+
+        function salvarLembrete() {
+            const tarefa = document.getElementById('tarefaInput').value.trim();
+            const data = document.getElementById('dataInput').value;
+            const horario = document.getElementById('horarioInput').value;
+            
+            if (!tarefa) {
+                alert('Por favor, digite a tarefa!');
+                return;
+            }
+            
+            if (!data) {
+                alert('Por favor, selecione a data!');
+                return;
+            }
+            
+            if (!horario) {
+                alert('Por favor, selecione o horário!');
+                return;
+            }
+            
+            const novoLembrete = {
+                id: Date.now(),
+                tarefa: tarefa,
+                data: data,
+                horario: horario,
+                concluido: false,
+                criado: new Date().toISOString()
+            };
+            
+            lembretes.push(novoLembrete);
+            localStorage.setItem('lembretes', JSON.stringify(lembretes));
+            
+            // Agendar notificação
+            agendarNotificacao(novoLembrete);
+            
+            cancelarLembrete();
+            atualizarListaLembretes();
+        }
+
+        function atualizarListaLembretes() {
+            const lista = document.getElementById('listaLembretes');
+            const emptyState = document.getElementById('emptyState');
+            
+            if (lembretes.length === 0) {
+                lista.innerHTML = '';
+                emptyState.style.display = 'block';
+                verificarLembretesUrgentes();
+                return;
+            }
+            
+            emptyState.style.display = 'none';
+            
+            // Ordenar por data e horário
+            const lembretesOrdenados = lembretes.sort((a, b) => {
+                const dataA = new Date(a.data + ' ' + a.horario);
+                const dataB = new Date(b.data + ' ' + b.horario);
+                return dataA - dataB;
+            });
+            
+            lista.innerHTML = lembretesOrdenados.map(lembrete => {
+                const dataLembrete = new Date(lembrete.data + ' ' + lembrete.horario);
+                const hoje = new Date();
+                const amanha = new Date(hoje);
+                amanha.setDate(hoje.getDate() + 1);
+                
+                let classeUrgencia = '';
+                if (dataLembrete < hoje && !lembrete.concluido) {
+                    classeUrgencia = 'urgente';
+                } else if (lembrete.data === hoje.toISOString().split('T')[0]) {
+                    classeUrgencia = 'hoje';
+                }
+                
+                const dataFormatada = new Date(lembrete.data).toLocaleDateString('pt-BR');
+                
+                return `
+                    <div class="lembrete-item ${classeUrgencia} ${lembrete.concluido ? 'concluido' : ''}">
+                        <div class="lembrete-header">
+                            <div class="lembrete-titulo">${lembrete.tarefa}</div>
+                            <div class="lembrete-status">
+                                ${!lembrete.concluido ? 
+                                    `<button class="btn-pequeno btn-concluir" onclick="concluirLembrete(${lembrete.id})">✓</button>` : 
+                                    ''
+                                }
+                                <button class="btn-pequeno btn-excluir" onclick="excluirLembrete(${lembrete.id})">🗑️</button>
+                            </div>
+                        </div>
+                        <div class="lembrete-info">
+                            <span>📅 ${dataFormatada}</span>
+                            <span>⏰ ${lembrete.horario}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            verificarLembretesUrgentes();
+        }
+
+        function concluirLembrete(id) {
+            lembretes = lembretes.map(lembrete => 
+                lembrete.id === id ? {...lembrete, concluido: true} : lembrete
+            );
+            localStorage.setItem('lembretes', JSON.stringify(lembretes));
+            atualizarListaLembretes();
+        }
+
+        function excluirLembrete(id) {
+            if (confirm('Tem certeza que deseja excluir este lembrete?')) {
+                lembretes = lembretes.filter(lembrete => lembrete.id !== id);
+                localStorage.setItem('lembretes', JSON.stringify(lembretes));
+                atualizarListaLembretes();
+            }
+        }
+
+        // FUNÇÕES DOS TREINOS
+        let treinos = JSON.parse(localStorage.getItem('treinos')) || [];
+        let diasSemanaConfig = JSON.parse(localStorage.getItem('diasSemanaConfig')) || {};
+        let historicoCargas = JSON.parse(localStorage.getItem('historicoCargas')) || {};
+
+        const diasSemana = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+
+        function mostrarConfigTreinos() {
+            document.getElementById('modalTreinos').style.display = 'block';
+            carregarConfigTreinos();
+        }
+
+        function fecharConfigTreinos() {
+            document.getElementById('modalTreinos').style.display = 'none';
+        }
+
+        function carregarConfigTreinos() {
+            // Carregar dias da semana
+            const diasDiv = document.getElementById('diasSemana');
+            diasDiv.innerHTML = diasSemana.map((dia, index) => `
+                <div class="dia-semana">
+                    <strong style="width: 80px;">${dia.charAt(0).toUpperCase() + dia.slice(1)}:</strong>
+                    <span style="font-size: 12px; color: #6c757d; width: 60px;">(${index === 0 ? 'Dom' : index === 1 ? 'Seg' : index === 2 ? 'Ter' : index === 3 ? 'Qua' : index === 4 ? 'Qui' : index === 5 ? 'Sex' : 'Sáb'})</span>
+                    <select id="select-${dia}">
+                        <option value="">Descanso</option>
+                        ${treinos.map(treino => 
+                            `<option value="${treino.id}" ${diasSemanaConfig[dia] === treino.id ? 'selected' : ''}>
+                                ${treino.nome}
+                            </option>`
+                        ).join('')}
+                    </select>
+                </div>
+            `).join('');
+
+            // Carregar treinos
+            const treinosDiv = document.getElementById('listaTreinos');
+            if (treinos.length === 0) {
+                treinosDiv.innerHTML = '<p style="text-align: center; color: #6c757d;">Nenhum treino cadastrado ainda</p>';
+                return;
+            }
+
+            treinosDiv.innerHTML = treinos.map(treino => `
+                <div class="treino-config">
+                    <div class="treino-titulo">
+                        <h4 style="color: #4facfe; margin: 0;">${treino.nome}</h4>
+                        <button onclick="excluirTreino('${treino.id}')" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 12px;">🗑️</button>
+                    </div>
+                    <div id="exercicios-${treino.id}">
+                        ${treino.exercicios.map((ex, index) => `
+                            <div style="margin-bottom: 10px; padding: 8px; background: white; border-radius: 4px;">
+                                <input type="text" value="${ex.nome}" placeholder="Nome do exercício" 
+                                       onchange="atualizarExercicio('${treino.id}', ${index}, 'nome', this.value)"
+                                       style="width: 100%; padding: 6px; margin-bottom: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                                <div style="display: flex; gap: 10px;">
+                                    <input type="number" value="${ex.series}" placeholder="Séries" 
+                                           onchange="atualizarExercicio('${treino.id}', ${index}, 'series', this.value)"
+                                           style="width: 60px; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                                    <span style="display: flex; align-items: center;">x</span>
+                                    <input type="number" value="${ex.repeticoes}" placeholder="Reps" 
+                                           onchange="atualizarExercicio('${treino.id}', ${index}, 'repeticoes', this.value)"
+                                           style="width: 60px; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                                    <button onclick="removerExercicio('${treino.id}', ${index})" 
+                                            style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 12px;">❌</button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button onclick="adicionarExercicio('${treino.id}')" 
+                            style="background: #28a745; color: white; border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; margin-top: 8px;">
+                        + Adicionar Exercício
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function adicionarTreino() {
+            const nome = prompt('Nome do treino (ex: Treino A, Peito/Tríceps):');
+            if (!nome) return;
+
+            const novoTreino = {
+                id: Date.now().toString(),
+                nome: nome,
+                exercicios: []
+            };
+
+            treinos.push(novoTreino);
+            carregarConfigTreinos();
+        }
+
+        function excluirTreino(id) {
+            if (confirm('Tem certeza que deseja excluir este treino?')) {
+                treinos = treinos.filter(t => t.id !== id);
+                carregarConfigTreinos();
+            }
+        }
+
+        function adicionarExercicio(treinoId) {
+            const treino = treinos.find(t => t.id === treinoId);
+            if (treino) {
+                treino.exercicios.push({
+                    nome: '',
+                    series: 4,
+                    repeticoes: 12
+                });
+                carregarConfigTreinos();
+            }
+        }
+
+        function removerExercicio(treinoId, index) {
+            const treino = treinos.find(t => t.id === treinoId);
+            if (treino) {
+                treino.exercicios.splice(index, 1);
+                carregarConfigTreinos();
+            }
+        }
+
+        function atualizarExercicio(treinoId, index, campo, valor) {
+            const treino = treinos.find(t => t.id === treinoId);
+            if (treino && treino.exercicios[index]) {
+                treino.exercicios[index][campo] = valor;
+            }
+        }
+
+        function salvarConfigTreinos() {
+            // Salvar configuração dos dias
+            diasSemana.forEach(dia => {
+                const select = document.getElementById(`select-${dia}`);
+                if (select) {
+                    diasSemanaConfig[dia] = select.value;
+                }
+            });
+
+            localStorage.setItem('treinos', JSON.stringify(treinos));
+            localStorage.setItem('diasSemanaConfig', JSON.stringify(diasSemanaConfig));
+            
+            fecharConfigTreinos();
+            atualizarTreinoHoje();
+            alert('Configuração salva com sucesso!');
+        }
+
+        function atualizarTreinoHoje() {
+            const hoje = new Date().getDay(); // 0=domingo, 1=segunda...
+            const nomeDia = diasSemana[hoje];
+            const treinoId = diasSemanaConfig[nomeDia];
+            
+            const treinoDiv = document.getElementById('treinoHoje');
+            
+            if (!treinoId) {
+                treinoDiv.innerHTML = `
+                    <div class="empty-state">
+                        <span class="icon">😴</span>
+                        <h3>Hoje é dia de descanso!</h3>
+                        <p>${nomeDia.charAt(0).toUpperCase() + nomeDia.slice(1)}</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            const treino = treinos.find(t => t.id === treinoId);
+            if (!treino || treino.exercicios.length === 0) {
+                treinoDiv.innerHTML = `
+                    <div class="empty-state">
+                        <span class="icon">💪</span>
+                        <h3>Configure seus treinos</h3>
+                        <p>Adicione exercícios ao treino de ${nomeDia}</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            treinoDiv.innerHTML = `
+                <div style="margin-bottom: 15px;">
+                    <h4 style="color: #4facfe; margin: 0 0 5px 0;">${treino.nome}</h4>
+                    <p style="color: #6c757d; margin: 0; font-size: 14px;">${nomeDia.charAt(0).toUpperCase() + nomeDia.slice(1)}</p>
+                </div>
+                ${treino.exercicios.map((exercicio, index) => {
+                    const chaveHistorico = `${treinoId}-${index}`;
+                    const ultimaCarga = historicoCargas[chaveHistorico] || '';
+                    
+                    return `
+                        <div class="exercicio-item">
+                            <div class="exercicio-header">
+                                <div class="exercicio-nome">${exercicio.nome}</div>
+                            </div>
+                            <div class="exercicio-series">${exercicio.series} séries x ${exercicio.repeticoes} repetições</div>
+                            <div class="carga-input">
+                                <span style="font-size: 14px; color: #333;">Carga:</span>
+                                <input type="number" id="carga-${chaveHistorico}" placeholder="kg" step="0.5">
+                                <button onclick="salvarCarga('${chaveHistorico}')" 
+                                        style="background: #4facfe; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 12px;">✓</button>
+                            </div>
+                            ${ultimaCarga ? `<div class="carga-ultima">Última: ${ultimaCarga}kg</div>` : ''}
+                        </div>
+                    `;
+                }).join('')}
+            `;
+        }
+
+        // FUNÇÕES DAS REFEIÇÕES
+        let refeicoes = JSON.parse(localStorage.getItem('refeicoes')) || [];
+
+        function calcularInsulina(carboidratos, insulinaPorCarb) {
+            if (!carboidratos || !insulinaPorCarb) return 0;
+            const resultado = carboidratos / insulinaPorCarb;
+            const decimal = resultado % 1;
+            
+            if (decimal >= 0.5) {
+                return Math.ceil(resultado);
+            } else {
+                return Math.floor(resultado);
+            }
+        }
+
+        function atualizarResumoNutricional() {
+            const resumoDiv = document.getElementById('resumoNutricional');
+            const conteudoDiv = document.getElementById('conteudoResumo');
+            
+            if (refeicoes.length === 0) {
+                resumoDiv.style.display = 'none';
+                return;
+            }
+            
+            // Calcular totais
+            let totalCalorias = 0;
+            let totalCarboidratos = 0;
+            let totalProteinas = 0;
+            let totalGorduras = 0;
+            let totalInsulina = 0;
+            
+            refeicoes.forEach(refeicao => {
+                totalCalorias += Number(refeicao.calorias) || 0;
+                totalCarboidratos += Number(refeicao.carboidratos) || 0;
+                totalProteinas += Number(refeicao.proteinas) || 0;
+                totalGorduras += Number(refeicao.gorduras) || 0;
+                totalInsulina += calcularInsulina(refeicao.carboidratos, refeicao.insulinaPorCarb || 10);
+            });
+            
+            conteudoDiv.innerHTML = `
+                <div class="resumo-calorias">
+                    <div style="font-size: 20px; font-weight: bold;">🔥 ${totalCalorias} kcal</div>
+                    <div style="font-size: 12px; opacity: 0.9;">Total do dia</div>
+                </div>
+                
+                <div class="resumo-macros">
+                    <div class="resumo-macro carbs">
+                        <span class="valor">${totalCarboidratos}g</span>
+                        <span class="label">Carboidratos</span>
+                    </div>
+                    <div class="resumo-macro protein">
+                        <span class="valor">${totalProteinas}g</span>
+                        <span class="label">Proteínas</span>
+                    </div>
+                    <div class="resumo-macro fat">
+                        <span class="valor">${totalGorduras}g</span>
+                        <span class="label">Gorduras</span>
+                    </div>
+                </div>
+                
+                <div class="resumo-insulina">
+                    <div style="font-size: 16px; font-weight: bold;">💉 ${totalInsulina} unidade${totalInsulina !== 1 ? 's' : ''} de insulina</div>
+                    <div style="font-size: 11px; opacity: 0.9;">Total do dia</div>
+                </div>
+            `;
+            
+            resumoDiv.style.display = 'block';
+        }
+
+        function mostrarSubAba(aba) {
+            // Remover classe active de todas as sub-abas
+            document.querySelectorAll('.sub-tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.sub-content').forEach(content => content.classList.remove('active'));
+            
+            // Adicionar classe active na aba selecionada
+            document.getElementById('btn' + aba.charAt(0).toUpperCase() + aba.slice(1)).classList.add('active');
+            document.getElementById('sub' + aba.charAt(0).toUpperCase() + aba.slice(1)).classList.add('active');
+            
+            // Mostrar/ocultar resumo nutricional apenas na aba de refeições
+            const resumoDiv = document.getElementById('resumoNutricional');
+            if (aba === 'refeicoes') {
+                atualizarResumoNutricional();
+            } else {
+                resumoDiv.style.display = 'none';
+            }
+        }
+
+        function mostrarConfigRefeicoes() {
+            document.getElementById('modalRefeicoes').style.display = 'block';
+            carregarConfigRefeicoes();
+        }
+
+        function fecharConfigRefeicoes() {
+            document.getElementById('modalRefeicoes').style.display = 'none';
+        }
+
+        function carregarConfigRefeicoes() {
+            const refeicoesDiv = document.getElementById('listaRefeicoes');
+            
+            if (refeicoes.length === 0) {
+                refeicoesDiv.innerHTML = '<p style="text-align: center; color: #6c757d;">Nenhuma refeição cadastrada ainda</p>';
+                return;
+            }
+
+            refeicoesDiv.innerHTML = refeicoes.map(refeicao => `
+                <div class="refeicao-config">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h4 style="color: #28a745; margin: 0;">Refeição</h4>
+                        <button onclick="excluirRefeicao('${refeicao.id}')" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 12px;">🗑️</button>
+                    </div>
+                    
+                    <div class="input-grupo">
+                        <label>Nome da refeição:</label>
+                        <input type="text" value="${refeicao.nome}" onchange="atualizarRefeicao('${refeicao.id}', 'nome', this.value)" placeholder="Ex: Café da manhã">
+                    </div>
+                    
+                    <div class="input-grupo">
+                        <label>Horário:</label>
+                        <input type="time" value="${refeicao.horario}" onchange="atualizarRefeicao('${refeicao.id}', 'horario', this.value)">
+                    </div>
+                    
+                    <div class="input-grupo">
+                        <label>Alimentos:</label>
+                        <textarea rows="3" onchange="atualizarRefeicao('${refeicao.id}', 'alimentos', this.value)" placeholder="Ex: 2 fatias de pão integral, 1 ovo, 200ml de leite">${refeicao.alimentos}</textarea>
+                    </div>
+                    
+                    <div class="macros-grid">
+                        <div class="input-grupo">
+                            <label>Carboidratos:</label>
+                            <input type="number" value="${refeicao.carboidratos}" onchange="atualizarRefeicao('${refeicao.id}', 'carboidratos', this.value)" step="0.1">
+                        </div>
+                        <div class="input-grupo">
+                            <label>Proteínas:</label>
+                            <input type="number" value="${refeicao.proteinas}" onchange="atualizarRefeicao('${refeicao.id}', 'proteinas', this.value)" step="0.1">
+                        </div>
+                        <div class="input-grupo">
+                            <label>Gorduras:</label>
+                            <input type="number" value="${refeicao.gorduras}" onchange="atualizarRefeicao('${refeicao.id}', 'gorduras', this.value)" step="0.1">
+                        </div>
+                    </div>
+                    
+                    <div style<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -843,6 +1972,7 @@
                 <div class="card">
                     <h3 style="margin-bottom: 15px; color: #4facfe; text-align: center;">💰 Resumo do Mês</h3>
                     <div id="saldoDisponivel"></div>
+                    <div id="progressoGastos" style="margin-top: 15px;"></div>
                 </div>
                 
                 <!-- Configuração de Salário -->
@@ -867,1007 +1997,4 @@
                 <!-- Gastos Fixos -->
                 <div class="card">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <h4 style="color: #ffc107; margin: 0;">🏠 Gastos Fixos</h4>
-                        <button onclick="mostrarFormGastoFixo()" style="background: #ffc107; color: #333; border: none; padding: 6px 12px; border-radius: 15px; font-size: 12px; font-weight: 600;">+ Adicionar</button>
-                    </div>
-                    <div id="listaGastosFixos"></div>
-                </div>
-                
-                <!-- Gastos Variáveis -->
-                <div class="card">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <h4 style="color: #dc3545; margin: 0;">📝 Gastos do Mês</h4>
-                        <button onclick="mostrarFormGastoVariavel()" style="background: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 15px; font-size: 12px; font-weight: 600;">+ Adicionar</button>
-                    </div>
-                    <div id="listaGastosVariaveis"></div>
-                </div>
-                
-                <!-- Botões de Ação -->
-                <div style="display: flex; gap: 10px; margin-top: 15px;">
-                    <button class="btn" onclick="mostrarConfigSalario()" style="flex: 1; background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-                        💵 Salário
-                    </button>
-                    <button class="btn" onclick="resetarMes()" style="flex: 1; background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);">
-                        🔄 Resetar Mês
-                    </button>
-                </div>
-                
-                <!-- Modal para Gasto Fixo -->
-                <div id="modalGastoFixo" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000;">
-                    <div style="background: white; margin: 50px 20px; border-radius: 15px; padding: 20px;">
-                        <h3 style="color: #ffc107; margin: 0 0 20px 0; text-align: center;">🏠 Adicionar Gasto Fixo</h3>
-                        
-                        <div class="input-grupo">
-                            <label>Descrição:</label>
-                            <input type="text" id="descricaoGastoFixo" placeholder="Ex: Academia, Netflix">
-                        </div>
-                        
-                        <div class="input-grupo">
-                            <label>Valor Mensal:</label>
-                            <input type="number" id="valorGastoFixo" placeholder="Ex: 150.00" step="0.01">
-                        </div>
-                        
-                        <div style="display: flex; gap: 10px; margin-top: 20px;">
-                            <button class="btn" onclick="salvarGastoFixo()" style="flex: 1; background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-                                ✅ Salvar
-                            </button>
-                            <button class="btn" onclick="fecharFormGastoFixo()" style="flex: 1; background: linear-gradient(135deg, #6c757d 0%, #495057 100%);">
-                                ❌ Cancelar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Modal para Gasto Variável -->
-                <div id="modalGastoVariavel" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000;">
-                    <div style="background: white; margin: 50px 20px; border-radius: 15px; padding: 20px;">
-                        <h3 style="color: #dc3545; margin: 0 0 20px 0; text-align: center;">📝 Adicionar Gasto</h3>
-                        
-                        <div class="input-grupo">
-                            <label>Descrição:</label>
-                            <input type="text" id="descricaoGastoVariavel" placeholder="Ex: Supermercado, Gasolina">
-                        </div>
-                        
-                        <div class="input-grupo">
-                            <label>Valor:</label>
-                            <input type="number" id="valorGastoVariavel" placeholder="Ex: 150.00" step="0.01">
-                        </div>
-                        
-                        <div class="input-grupo">
-                            <label>Data:</label>
-                            <input type="date" id="dataGastoVariavel">
-                        </div>
-                        
-                        <div style="display: flex; gap: 10px; margin-top: 20px;">
-                            <button class="btn" onclick="salvarGastoVariavel()" style="flex: 1; background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-                                ✅ Salvar
-                            </button>
-                            <button class="btn" onclick="fecharFormGastoVariavel()" style="flex: 1; background: linear-gradient(135deg, #6c757d 0%, #495057 100%);">
-                                ❌ Cancelar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // Função para mostrar a data atual
-        function updateDate() {
-            const now = new Date();
-            const options = { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-            };
-            const dateString = now.toLocaleDateString('pt-BR', options);
-            document.getElementById('dateInfo').textContent = dateString;
-        }
-
-        // Função para trocar entre abas
-        function showTab(tabName) {
-            // Remover classe active de todas as abas
-            const tabs = document.querySelectorAll('.tab');
-            const contents = document.querySelectorAll('.tab-content');
-            
-            tabs.forEach(tab => tab.classList.remove('active'));
-            contents.forEach(content => content.classList.remove('active'));
-            
-            // Adicionar classe active na aba selecionada
-            event.target.classList.add('active');
-            document.getElementById(tabName).classList.add('active');
-        }
-
-        // FUNÇÕES DOS LEMBRETES
-        let lembretes = JSON.parse(localStorage.getItem('lembretes')) || [];
-
-        function mostrarFormLembrete() {
-            document.getElementById('formLembrete').style.display = 'block';
-            document.getElementById('emptyState').style.display = 'none';
-            
-            // Definir data padrão como hoje
-            const hoje = new Date().toISOString().split('T')[0];
-            document.getElementById('dataInput').value = hoje;
-        }
-
-        function cancelarLembrete() {
-            document.getElementById('formLembrete').style.display = 'none';
-            document.getElementById('tarefaInput').value = '';
-            document.getElementById('dataInput').value = '';
-            document.getElementById('horarioInput').value = '';
-            atualizarListaLembretes();
-        }
-
-        function salvarLembrete() {
-            const tarefa = document.getElementById('tarefaInput').value.trim();
-            const data = document.getElementById('dataInput').value;
-            const horario = document.getElementById('horarioInput').value;
-            
-            if (!tarefa) {
-                alert('Por favor, digite a tarefa!');
-                return;
-            }
-            
-            if (!data) {
-                alert('Por favor, selecione a data!');
-                return;
-            }
-            
-            if (!horario) {
-                alert('Por favor, selecione o horário!');
-                return;
-            }
-            
-            const novoLembrete = {
-                id: Date.now(),
-                tarefa: tarefa,
-                data: data,
-                horario: horario,
-                concluido: false,
-                criado: new Date().toISOString()
-            };
-            
-            lembretes.push(novoLembrete);
-            localStorage.setItem('lembretes', JSON.stringify(lembretes));
-            
-            // Agendar notificação
-            agendarNotificacao(novoLembrete);
-            
-            cancelarLembrete();
-            atualizarListaLembretes();
-        }
-
-        function atualizarListaLembretes() {
-            const lista = document.getElementById('listaLembretes');
-            const emptyState = document.getElementById('emptyState');
-            
-            if (lembretes.length === 0) {
-                lista.innerHTML = '';
-                emptyState.style.display = 'block';
-                verificarLembretesUrgentes();
-                return;
-            }
-            
-            emptyState.style.display = 'none';
-            
-            // Ordenar por data e horário
-            const lembretesOrdenados = lembretes.sort((a, b) => {
-                const dataA = new Date(a.data + ' ' + a.horario);
-                const dataB = new Date(b.data + ' ' + b.horario);
-                return dataA - dataB;
-            });
-            
-            lista.innerHTML = lembretesOrdenados.map(lembrete => {
-                const dataLembrete = new Date(lembrete.data + ' ' + lembrete.horario);
-                const hoje = new Date();
-                const amanha = new Date(hoje);
-                amanha.setDate(hoje.getDate() + 1);
-                
-                let classeUrgencia = '';
-                if (dataLembrete < hoje && !lembrete.concluido) {
-                    classeUrgencia = 'urgente';
-                } else if (lembrete.data === hoje.toISOString().split('T')[0]) {
-                    classeUrgencia = 'hoje';
-                }
-                
-                const dataFormatada = new Date(lembrete.data).toLocaleDateString('pt-BR');
-                
-                return `
-                    <div class="lembrete-item ${classeUrgencia} ${lembrete.concluido ? 'concluido' : ''}">
-                        <div class="lembrete-header">
-                            <div class="lembrete-titulo">${lembrete.tarefa}</div>
-                            <div class="lembrete-status">
-                                ${!lembrete.concluido ? 
-                                    `<button class="btn-pequeno btn-concluir" onclick="concluirLembrete(${lembrete.id})">✓</button>` : 
-                                    ''
-                                }
-                                <button class="btn-pequeno btn-excluir" onclick="excluirLembrete(${lembrete.id})">🗑️</button>
-                            </div>
-                        </div>
-                        <div class="lembrete-info">
-                            <span>📅 ${dataFormatada}</span>
-                            <span>⏰ ${lembrete.horario}</span>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-            
-            verificarLembretesUrgentes();
-        }
-
-        function concluirLembrete(id) {
-            lembretes = lembretes.map(lembrete => 
-                lembrete.id === id ? {...lembrete, concluido: true} : lembrete
-            );
-            localStorage.setItem('lembretes', JSON.stringify(lembretes));
-            atualizarListaLembretes();
-        }
-
-        function excluirLembrete(id) {
-            if (confirm('Tem certeza que deseja excluir este lembrete?')) {
-                lembretes = lembretes.filter(lembrete => lembrete.id !== id);
-                localStorage.setItem('lembretes', JSON.stringify(lembretes));
-                atualizarListaLembretes();
-            }
-        }
-
-        // FUNÇÕES DOS TREINOS
-        let treinos = JSON.parse(localStorage.getItem('treinos')) || [];
-        let diasSemanaConfig = JSON.parse(localStorage.getItem('diasSemanaConfig')) || {};
-        let historicoCargas = JSON.parse(localStorage.getItem('historicoCargas')) || {};
-
-        const diasSemana = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
-
-        function mostrarConfigTreinos() {
-            document.getElementById('modalTreinos').style.display = 'block';
-            carregarConfigTreinos();
-        }
-
-        function fecharConfigTreinos() {
-            document.getElementById('modalTreinos').style.display = 'none';
-        }
-
-        function carregarConfigTreinos() {
-            // Carregar dias da semana
-            const diasDiv = document.getElementById('diasSemana');
-            diasDiv.innerHTML = diasSemana.map((dia, index) => `
-                <div class="dia-semana">
-                    <strong style="width: 80px;">${dia.charAt(0).toUpperCase() + dia.slice(1)}:</strong>
-                    <span style="font-size: 12px; color: #6c757d; width: 60px;">(${index === 0 ? 'Dom' : index === 1 ? 'Seg' : index === 2 ? 'Ter' : index === 3 ? 'Qua' : index === 4 ? 'Qui' : index === 5 ? 'Sex' : 'Sáb'})</span>
-                    <select id="select-${dia}">
-                        <option value="">Descanso</option>
-                        ${treinos.map(treino => 
-                            `<option value="${treino.id}" ${diasSemanaConfig[dia] === treino.id ? 'selected' : ''}>
-                                ${treino.nome}
-                            </option>`
-                        ).join('')}
-                    </select>
-                </div>
-            `).join('');
-
-            // Carregar treinos
-            const treinosDiv = document.getElementById('listaTreinos');
-            if (treinos.length === 0) {
-                treinosDiv.innerHTML = '<p style="text-align: center; color: #6c757d;">Nenhum treino cadastrado ainda</p>';
-                return;
-            }
-
-            treinosDiv.innerHTML = treinos.map(treino => `
-                <div class="treino-config">
-                    <div class="treino-titulo">
-                        <h4 style="color: #4facfe; margin: 0;">${treino.nome}</h4>
-                        <button onclick="excluirTreino('${treino.id}')" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 12px;">🗑️</button>
-                    </div>
-                    <div id="exercicios-${treino.id}">
-                        ${treino.exercicios.map((ex, index) => `
-                            <div style="margin-bottom: 10px; padding: 8px; background: white; border-radius: 4px;">
-                                <input type="text" value="${ex.nome}" placeholder="Nome do exercício" 
-                                       onchange="atualizarExercicio('${treino.id}', ${index}, 'nome', this.value)"
-                                       style="width: 100%; padding: 6px; margin-bottom: 6px; border: 1px solid #ddd; border-radius: 4px;">
-                                <div style="display: flex; gap: 10px;">
-                                    <input type="number" value="${ex.series}" placeholder="Séries" 
-                                           onchange="atualizarExercicio('${treino.id}', ${index}, 'series', this.value)"
-                                           style="width: 60px; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
-                                    <span style="display: flex; align-items: center;">x</span>
-                                    <input type="number" value="${ex.repeticoes}" placeholder="Reps" 
-                                           onchange="atualizarExercicio('${treino.id}', ${index}, 'repeticoes', this.value)"
-                                           style="width: 60px; padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
-                                    <button onclick="removerExercicio('${treino.id}', ${index})" 
-                                            style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 12px;">❌</button>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                    <button onclick="adicionarExercicio('${treino.id}')" 
-                            style="background: #28a745; color: white; border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; margin-top: 8px;">
-                        + Adicionar Exercício
-                    </button>
-                </div>
-            `).join('');
-        }
-
-        function adicionarTreino() {
-            const nome = prompt('Nome do treino (ex: Treino A, Peito/Tríceps):');
-            if (!nome) return;
-
-            const novoTreino = {
-                id: Date.now().toString(),
-                nome: nome,
-                exercicios: []
-            };
-
-            treinos.push(novoTreino);
-            carregarConfigTreinos();
-        }
-
-        function excluirTreino(id) {
-            if (confirm('Tem certeza que deseja excluir este treino?')) {
-                treinos = treinos.filter(t => t.id !== id);
-                carregarConfigTreinos();
-            }
-        }
-
-        function adicionarExercicio(treinoId) {
-            const treino = treinos.find(t => t.id === treinoId);
-            if (treino) {
-                treino.exercicios.push({
-                    nome: '',
-                    series: 4,
-                    repeticoes: 12
-                });
-                carregarConfigTreinos();
-            }
-        }
-
-        function removerExercicio(treinoId, index) {
-            const treino = treinos.find(t => t.id === treinoId);
-            if (treino) {
-                treino.exercicios.splice(index, 1);
-                carregarConfigTreinos();
-            }
-        }
-
-        function atualizarExercicio(treinoId, index, campo, valor) {
-            const treino = treinos.find(t => t.id === treinoId);
-            if (treino && treino.exercicios[index]) {
-                treino.exercicios[index][campo] = valor;
-            }
-        }
-
-        function salvarConfigTreinos() {
-            // Salvar configuração dos dias
-            diasSemana.forEach(dia => {
-                const select = document.getElementById(`select-${dia}`);
-                if (select) {
-                    diasSemanaConfig[dia] = select.value;
-                }
-            });
-
-            localStorage.setItem('treinos', JSON.stringify(treinos));
-            localStorage.setItem('diasSemanaConfig', JSON.stringify(diasSemanaConfig));
-            
-            fecharConfigTreinos();
-            atualizarTreinoHoje();
-            alert('Configuração salva com sucesso!');
-        }
-
-        function atualizarTreinoHoje() {
-            const hoje = new Date().getDay(); // 0=domingo, 1=segunda...
-            const nomeDia = diasSemana[hoje];
-            const treinoId = diasSemanaConfig[nomeDia];
-            
-            const treinoDiv = document.getElementById('treinoHoje');
-            
-            if (!treinoId) {
-                treinoDiv.innerHTML = `
-                    <div class="empty-state">
-                        <span class="icon">😴</span>
-                        <h3>Hoje é dia de descanso!</h3>
-                        <p>${nomeDia.charAt(0).toUpperCase() + nomeDia.slice(1)}</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            const treino = treinos.find(t => t.id === treinoId);
-            if (!treino || treino.exercicios.length === 0) {
-                treinoDiv.innerHTML = `
-                    <div class="empty-state">
-                        <span class="icon">💪</span>
-                        <h3>Configure seus treinos</h3>
-                        <p>Adicione exercícios ao treino de ${nomeDia}</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            treinoDiv.innerHTML = `
-                <div style="margin-bottom: 15px;">
-                    <h4 style="color: #4facfe; margin: 0 0 5px 0;">${treino.nome}</h4>
-                    <p style="color: #6c757d; margin: 0; font-size: 14px;">${nomeDia.charAt(0).toUpperCase() + nomeDia.slice(1)}</p>
-                </div>
-                ${treino.exercicios.map((exercicio, index) => {
-                    const chaveHistorico = `${treinoId}-${index}`;
-                    const ultimaCarga = historicoCargas[chaveHistorico] || '';
-                    
-                    return `
-                        <div class="exercicio-item">
-                            <div class="exercicio-header">
-                                <div class="exercicio-nome">${exercicio.nome}</div>
-                            </div>
-                            <div class="exercicio-series">${exercicio.series} séries x ${exercicio.repeticoes} repetições</div>
-                            <div class="carga-input">
-                                <span style="font-size: 14px; color: #333;">Carga:</span>
-                                <input type="number" id="carga-${chaveHistorico}" placeholder="kg" step="0.5">
-                                <button onclick="salvarCarga('${chaveHistorico}')" 
-                                        style="background: #4facfe; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 12px;">✓</button>
-                            </div>
-                            ${ultimaCarga ? `<div class="carga-ultima">Última: ${ultimaCarga}kg</div>` : ''}
-                        </div>
-                    `;
-                }).join('')}
-            `;
-        }
-
-        // FUNÇÕES DAS REFEIÇÕES
-        let refeicoes = JSON.parse(localStorage.getItem('refeicoes')) || [];
-
-        function calcularInsulina(carboidratos, insulinaPorCarb) {
-            if (!carboidratos || !insulinaPorCarb) return 0;
-            const resultado = carboidratos / insulinaPorCarb;
-            const decimal = resultado % 1;
-            
-            if (decimal >= 0.5) {
-                return Math.ceil(resultado);
-            } else {
-                return Math.floor(resultado);
-            }
-        }
-
-        function atualizarResumoNutricional() {
-            const resumoDiv = document.getElementById('resumoNutricional');
-            const conteudoDiv = document.getElementById('conteudoResumo');
-            
-            if (refeicoes.length === 0) {
-                resumoDiv.style.display = 'none';
-                return;
-            }
-            
-            // Calcular totais
-            let totalCalorias = 0;
-            let totalCarboidratos = 0;
-            let totalProteinas = 0;
-            let totalGorduras = 0;
-            let totalInsulina = 0;
-            
-            refeicoes.forEach(refeicao => {
-                totalCalorias += Number(refeicao.calorias) || 0;
-                totalCarboidratos += Number(refeicao.carboidratos) || 0;
-                totalProteinas += Number(refeicao.proteinas) || 0;
-                totalGorduras += Number(refeicao.gorduras) || 0;
-                totalInsulina += calcularInsulina(refeicao.carboidratos, refeicao.insulinaPorCarb || 10);
-            });
-            
-            conteudoDiv.innerHTML = `
-                <div class="resumo-calorias">
-                    <div style="font-size: 20px; font-weight: bold;">🔥 ${totalCalorias} kcal</div>
-                    <div style="font-size: 12px; opacity: 0.9;">Total do dia</div>
-                </div>
-                
-                <div class="resumo-macros">
-                    <div class="resumo-macro carbs">
-                        <span class="valor">${totalCarboidratos}g</span>
-                        <span class="label">Carboidratos</span>
-                    </div>
-                    <div class="resumo-macro protein">
-                        <span class="valor">${totalProteinas}g</span>
-                        <span class="label">Proteínas</span>
-                    </div>
-                    <div class="resumo-macro fat">
-                        <span class="valor">${totalGorduras}g</span>
-                        <span class="label">Gorduras</span>
-                    </div>
-                </div>
-                
-                <div class="resumo-insulina">
-                    <div style="font-size: 16px; font-weight: bold;">💉 ${totalInsulina} unidade${totalInsulina !== 1 ? 's' : ''} de insulina</div>
-                    <div style="font-size: 11px; opacity: 0.9;">Total do dia</div>
-                </div>
-            `;
-            
-            resumoDiv.style.display = 'block';
-        }
-
-        function mostrarSubAba(aba) {
-            // Remover classe active de todas as sub-abas
-            document.querySelectorAll('.sub-tab').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('.sub-content').forEach(content => content.classList.remove('active'));
-            
-            // Adicionar classe active na aba selecionada
-            document.getElementById('btn' + aba.charAt(0).toUpperCase() + aba.slice(1)).classList.add('active');
-            document.getElementById('sub' + aba.charAt(0).toUpperCase() + aba.slice(1)).classList.add('active');
-            
-            // Mostrar/ocultar resumo nutricional apenas na aba de refeições
-            const resumoDiv = document.getElementById('resumoNutricional');
-            if (aba === 'refeicoes') {
-                atualizarResumoNutricional();
-            } else {
-                resumoDiv.style.display = 'none';
-            }
-        }
-
-        function mostrarConfigRefeicoes() {
-            document.getElementById('modalRefeicoes').style.display = 'block';
-            carregarConfigRefeicoes();
-        }
-
-        function fecharConfigRefeicoes() {
-            document.getElementById('modalRefeicoes').style.display = 'none';
-        }
-
-        function carregarConfigRefeicoes() {
-            const refeicoesDiv = document.getElementById('listaRefeicoes');
-            
-            if (refeicoes.length === 0) {
-                refeicoesDiv.innerHTML = '<p style="text-align: center; color: #6c757d;">Nenhuma refeição cadastrada ainda</p>';
-                return;
-            }
-
-            refeicoesDiv.innerHTML = refeicoes.map(refeicao => `
-                <div class="refeicao-config">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <h4 style="color: #28a745; margin: 0;">Refeição</h4>
-                        <button onclick="excluirRefeicao('${refeicao.id}')" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 12px;">🗑️</button>
-                    </div>
-                    
-                    <div class="input-grupo">
-                        <label>Nome da refeição:</label>
-                        <input type="text" value="${refeicao.nome}" onchange="atualizarRefeicao('${refeicao.id}', 'nome', this.value)" placeholder="Ex: Café da manhã">
-                    </div>
-                    
-                    <div class="input-grupo">
-                        <label>Horário:</label>
-                        <input type="time" value="${refeicao.horario}" onchange="atualizarRefeicao('${refeicao.id}', 'horario', this.value)">
-                    </div>
-                    
-                    <div class="input-grupo">
-                        <label>Alimentos:</label>
-                        <textarea rows="3" onchange="atualizarRefeicao('${refeicao.id}', 'alimentos', this.value)" placeholder="Ex: 2 fatias de pão integral, 1 ovo, 200ml de leite">${refeicao.alimentos}</textarea>
-                    </div>
-                    
-                    <div class="macros-grid">
-                        <div class="input-grupo">
-                            <label>Carboidratos:</label>
-                            <input type="number" value="${refeicao.carboidratos}" onchange="atualizarRefeicao('${refeicao.id}', 'carboidratos', this.value)" step="0.1">
-                        </div>
-                        <div class="input-grupo">
-                            <label>Proteínas:</label>
-                            <input type="number" value="${refeicao.proteinas}" onchange="atualizarRefeicao('${refeicao.id}', 'proteinas', this.value)" step="0.1">
-                        </div>
-                        <div class="input-grupo">
-                            <label>Gorduras:</label>
-                            <input type="number" value="${refeicao.gorduras}" onchange="atualizarRefeicao('${refeicao.id}', 'gorduras', this.value)" step="0.1">
-                        </div>
-                    </div>
-                    
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                        <div class="input-grupo">
-                            <label>Calorias:</label>
-                            <input type="number" value="${refeicao.calorias}" onchange="atualizarRefeicao('${refeicao.id}', 'calorias', this.value)">
-                        </div>
-                        <div class="input-grupo">
-                            <label>Carboidratos por UI:</label>
-                            <input type="number" value="${refeicao.insulinaPorCarb || 10}" onchange="atualizarRefeicao('${refeicao.id}', 'insulinaPorCarb', this.value)" step="0.1" min="0.1">
-                        </div>
-                    </div>
-                    
-                    <div style="background: #e3f2fd; padding: 8px; border-radius: 4px; margin-top: 10px; text-align: center;">
-                        <strong style="color: #1976d2;">Insulina: ${calcularInsulina(refeicao.carboidratos, refeicao.insulinaPorCarb || 10)} unidade${calcularInsulina(refeicao.carboidratos, refeicao.insulinaPorCarb || 10) !== 1 ? 's' : ''}</strong>
-                        <br><small style="color: #666;">1 unidade para cada ${refeicao.insulinaPorCarb || 10}g de carboidrato</small>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function adicionarRefeicao() {
-            const novaRefeicao = {
-                id: Date.now().toString(),
-                nome: '',
-                horario: '08:00',
-                alimentos: '',
-                carboidratos: 0,
-                proteinas: 0,
-                gorduras: 0,
-                calorias: 0,
-                insulinaPorCarb: 10
-            };
-
-            refeicoes.push(novaRefeicao);
-            carregarConfigRefeicoes();
-        }
-
-        function excluirRefeicao(id) {
-            if (confirm('Tem certeza que deseja excluir esta refeição?')) {
-                refeicoes = refeicoes.filter(r => r.id !== id);
-                carregarConfigRefeicoes();
-            }
-        }
-
-        function atualizarRefeicao(id, campo, valor) {
-            const refeicao = refeicoes.find(r => r.id === id);
-            if (refeicao) {
-                refeicao[campo] = valor;
-                // Recarregar para atualizar o cálculo de insulina
-                if (campo === 'carboidratos' || campo === 'insulinaPorCarb') {
-                    carregarConfigRefeicoes();
-                }
-            }
-        }
-
-        function salvarConfigRefeicoes() {
-            localStorage.setItem('refeicoes', JSON.stringify(refeicoes));
-            fecharConfigRefeicoes();
-            atualizarRefeicoesHoje();
-            atualizarResumoNutricional();
-            alert('Refeições salvas com sucesso!');
-        }
-
-        function atualizarRefeicoesHoje() {
-            const refeicoesDiv = document.getElementById('refeicoesHoje');
-            
-            if (refeicoes.length === 0) {
-                refeicoesDiv.innerHTML = `
-                    <div class="empty-state">
-                        <span class="icon">🥗</span>
-                        <h3>Configure suas refeições</h3>
-                        <p>Defina seus horários e cardápio diário</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            // Ordenar por horário
-            const refeicoesOrdenadas = refeicoes.sort((a, b) => {
-                return a.horario.localeCompare(b.horario);
-            });
-            
-            const agora = new Date();
-            const horaAtual = agora.getHours() * 60 + agora.getMinutes();
-            
-            refeicoesDiv.innerHTML = refeicoesOrdenadas.map(refeicao => {
-                const [hora, minuto] = refeicao.horario.split(':').map(Number);
-                const horarioRefeicao = hora * 60 + minuto;
-                const insulina = calcularInsulina(refeicao.carboidratos, refeicao.insulinaPorCarb || 10);
-                
-                // Determinar se é próxima refeição (próxima 30 min)
-                const isProxima = horarioRefeicao > horaAtual && horarioRefeicao <= horaAtual + 30;
-                const isPendente = horarioRefeicao > horaAtual;
-                
-                return `
-                    <div class="refeicao-item ${isProxima ? 'hoje' : ''}">
-                        <div class="refeicao-header">
-                            <div class="refeicao-nome">
-                                ${refeicao.nome}
-                                ${isProxima ? ' 🔔' : ''}
-                                ${!isPendente ? ' ✅' : ''}
-                            </div>
-                            <div class="refeicao-horario">${refeicao.horario}</div>
-                        </div>
-                        
-                        <div style="font-size: 12px; color: #666; margin-bottom: 8px; white-space: pre-line;">
-                            ${refeicao.alimentos}
-                        </div>
-                        
-                        <div class="refeicao-macros">
-                            <div class="macro-item carbs">
-                                <div>Carbs</div>
-                                <strong>${refeicao.carboidratos}g</strong>
-                            </div>
-                            <div class="macro-item protein">
-                                <div>Prot</div>
-                                <strong>${refeicao.proteinas}g</strong>
-                            </div>
-                            <div class="macro-item fat">
-                                <div>Gord</div>
-                                <strong>${refeicao.gorduras}g</strong>
-                            </div>
-                        </div>
-                        
-                        <div class="refeicao-info">
-                            <span>🔥 ${refeicao.calorias} kcal</span>
-                            <div class="insulina-info">💉 ${insulina} unidade${insulina !== 1 ? 's' : ''}</div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-            
-            // Atualizar resumo se estivermos na aba de refeições
-            const btnRefeicoes = document.getElementById('btnRefeicoes');
-            if (btnRefeicoes && btnRefeicoes.classList.contains('active')) {
-                atualizarResumoNutricional();
-            }
-        }
-
-        // FUNÇÕES FINANCEIRAS
-        let configFinanceira = JSON.parse(localStorage.getItem('configFinanceira')) || { salario: 0, gastosFixos: 0 };
-        let gastosVariaveis = JSON.parse(localStorage.getItem('gastosVariaveis')) || [];
-        let mesAtual = new Date().getMonth() + '-' + new Date().getFullYear();
-
-        function mostrarConfigFinanceira() {
-            document.getElementById('configFinanceira').style.display = 'block';
-            document.getElementById('salarioInput').value = configFinanceira.salario || '';
-            document.getElementById('gastosFixosInput').value = configFinanceira.gastosFixos || '';
-        }
-
-        function cancelarConfigFinanceira() {
-            document.getElementById('configFinanceira').style.display = 'none';
-        }
-
-        function salvarConfigFinanceira() {
-            const salario = parseFloat(document.getElementById('salarioInput').value) || 0;
-            const gastosFixos = parseFloat(document.getElementById('gastosFixosInput').value) || 0;
-            
-            configFinanceira = { salario, gastosFixos };
-            localStorage.setItem('configFinanceira', JSON.stringify(configFinanceira));
-            
-            cancelarConfigFinanceira();
-            atualizarResumoFinanceiro();
-            alert('Configuração financeira salva!');
-        }
-
-        function mostrarFormGasto() {
-            document.getElementById('modalGasto').style.display = 'block';
-            document.getElementById('dataGasto').value = new Date().toISOString().split('T')[0];
-        }
-
-        function fecharFormGasto() {
-            document.getElementById('modalGasto').style.display = 'none';
-            document.getElementById('descricaoGasto').value = '';
-            document.getElementById('valorGasto').value = '';
-            document.getElementById('dataGasto').value = '';
-        }
-
-        function salvarGasto() {
-            const descricao = document.getElementById('descricaoGasto').value.trim();
-            const valor = parseFloat(document.getElementById('valorGasto').value);
-            const data = document.getElementById('dataGasto').value;
-            
-            if (!descricao) {
-                alert('Por favor, digite a descrição do gasto!');
-                return;
-            }
-            
-            if (!valor || valor <= 0) {
-                alert('Por favor, digite um valor válido!');
-                return;
-            }
-            
-            if (!data) {
-                alert('Por favor, selecione a data!');
-                return;
-            }
-            
-            const novoGasto = {
-                id: Date.now(),
-                descricao,
-                valor,
-                data,
-                mes: mesAtual
-            };
-            
-            gastosVariaveis.push(novoGasto);
-            localStorage.setItem('gastosVariaveis', JSON.stringify(gastosVariaveis));
-            
-            fecharFormGasto();
-            atualizarListaGastos();
-            atualizarResumoFinanceiro();
-        }
-
-        function excluirGasto(id) {
-            if (confirm('Tem certeza que deseja excluir este gasto?')) {
-                gastosVariaveis = gastosVariaveis.filter(g => g.id !== id);
-                localStorage.setItem('gastosVariaveis', JSON.stringify(gastosVariaveis));
-                atualizarListaGastos();
-                atualizarResumoFinanceiro();
-            }
-        }
-
-        function resetarMes() {
-            if (confirm('Tem certeza que deseja resetar o mês? Todos os gastos variáveis serão apagados!')) {
-                // Remover apenas gastos do mês atual
-                gastosVariaveis = gastosVariaveis.filter(g => g.mes !== mesAtual);
-                localStorage.setItem('gastosVariaveis', JSON.stringify(gastosVariaveis));
-                
-                atualizarListaGastos();
-                atualizarResumoFinanceiro();
-                alert('Mês resetado com sucesso!');
-            }
-        }
-
-        function atualizarResumoFinanceiro() {
-            const saldoDiv = document.getElementById('saldoDisponivel');
-            
-            // Calcular totais
-            const salario = configFinanceira.salario || 0;
-            const gastosFixos = configFinanceira.gastosFixos || 0;
-            const gastosDoMes = gastosVariaveis
-                .filter(g => g.mes === mesAtual)
-                .reduce((total, gasto) => total + gasto.valor, 0);
-            
-            const saldoDisponivel = salario - gastosFixos - gastosDoMes;
-            const isPositivo = saldoDisponivel >= 0;
-            
-            if (salario === 0) {
-                saldoDiv.innerHTML = `
-                    <div class="empty-state">
-                        <span class="icon">⚙️</span>
-                        <h3>Configure suas finanças</h3>
-                        <p>Defina seu salário e gastos fixos para começar</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            saldoDiv.innerHTML = `
-                <div class="${isPositivo ? 'saldo-positivo' : 'saldo-negativo'}">
-                    <div class="saldo-valor">
-                        ${saldoDisponivel >= 0 ? '+' : ''}R$ ${saldoDisponivel.toFixed(2).replace('.', ',')}
-                    </div>
-                    <div class="saldo-label">
-                        ${isPositivo ? 'Disponível para gastar' : 'Acima do orçamento'}
-                    </div>
-                </div>
-                
-                <div class="resumo-financeiro">
-                    <div class="item-resumo">
-                        <span class="valor" style="color: #28a745;">R$ ${salario.toFixed(2).replace('.', ',')}</span>
-                        <div>Salário</div>
-                    </div>
-                    <div class="item-resumo">
-                        <span class="valor" style="color: #ffc107;">R$ ${gastosFixos.toFixed(2).replace('.', ',')}</span>
-                        <div>Gastos Fixos</div>
-                    </div>
-                    <div class="item-resumo">
-                        <span class="valor" style="color: #dc3545;">R$ ${gastosDoMes.toFixed(2).replace('.', ',')}</span>
-                        <div>Gastos do Mês</div>
-                    </div>
-                </div>
-            `;
-        }
-
-        function atualizarListaGastos() {
-            const listaDiv = document.getElementById('listaGastos');
-            const gastosDoMes = gastosVariaveis.filter(g => g.mes === mesAtual);
-            
-            if (gastosDoMes.length === 0) {
-                listaDiv.innerHTML = `
-                    <div style="text-align: center; color: #6c757d; padding: 20px;">
-                        <span style="font-size: 24px; display: block; margin-bottom: 10px;">📝</span>
-                        <p>Nenhum gasto registrado este mês</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            // Ordenar por data (mais recentes primeiro)
-            const gastosOrdenados = gastosDoMes.sort((a, b) => new Date(b.data) - new Date(a.data));
-            
-            listaDiv.innerHTML = gastosOrdenados.map(gasto => {
-                const dataFormatada = new Date(gasto.data).toLocaleDateString('pt-BR');
-                
-                return `
-                    <div class="gasto-item">
-                        <div class="gasto-info">
-                            <div class="gasto-descricao">${gasto.descricao}</div>
-                            <div class="gasto-data">${dataFormatada}</div>
-                        </div>
-                        <div class="gasto-valor">R$ ${gasto.valor.toFixed(2).replace('.', ',')}</div>
-                        <button class="btn-excluir-gasto" onclick="excluirGasto(${gasto.id})">🗑️</button>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function salvarCarga(chaveHistorico) {
-            const input = document.getElementById(`carga-${chaveHistorico}`);
-            const carga = input.value;
-            
-            if (carga) {
-                historicoCargas[chaveHistorico] = carga;
-                localStorage.setItem('historicoCargas', JSON.stringify(historicoCargas));
-                input.value = '';
-                atualizarTreinoHoje();
-            }
-        }
-
-        function verificarLembretesUrgentes() {
-            const agora = new Date();
-            const hoje = agora.toISOString().split('T')[0];
-            const horaAtual = agora.getHours() * 60 + agora.getMinutes();
-            
-            const atrasados = lembretes.filter(l => {
-                if (l.concluido) return false;
-                
-                const dataLembrete = new Date(l.data + ' ' + l.horario);
-                return dataLembrete < agora;
-            });
-            
-            const hojeRestante = lembretes.filter(l => {
-                if (l.concluido || l.data !== hoje) return false;
-                
-                const [hora, minuto] = l.horario.split(':').map(Number);
-                const horarioLembrete = hora * 60 + minuto;
-                return horarioLembrete > horaAtual;
-            });
-            
-            const alertaDiv = document.getElementById('alertaLembretes');
-            
-            if (atrasados.length > 0) {
-                alertaDiv.innerHTML = `
-                    <div class="alerta-lembretes">
-                        🚨 ${atrasados.length} tarefa${atrasados.length > 1 ? 's' : ''} atrasada${atrasados.length > 1 ? 's' : ''}!
-                    </div>
-                `;
-                alertaDiv.style.display = 'block';
-            } else if (hojeRestante.length > 0) {
-                alertaDiv.innerHTML = `
-                    <div class="alerta-lembretes alerta-hoje">
-                        📅 ${hojeRestante.length} tarefa${hojeRestante.length > 1 ? 's' : ''} para hoje
-                    </div>
-                `;
-                alertaDiv.style.display = 'block';
-            } else {
-                alertaDiv.style.display = 'none';
-            }
-        }
-
-        function agendarNotificacao(lembrete) {
-            // Manter a função original por compatibilidade
-            // mas focar nos alertas visuais
-            if ('Notification' in window && Notification.permission === 'granted') {
-                const dataNotificacao = new Date(lembrete.data + ' ' + lembrete.horario);
-                const agora = new Date();
-                const tempoAteNotificacao = dataNotificacao.getTime() - agora.getTime();
-                
-                if (tempoAteNotificacao > 0 && tempoAteNotificacao < 24 * 60 * 60 * 1000) { // Só até 24h
-                    setTimeout(() => {
-                        new Notification('🔔 Lembrete!', {
-                            body: lembrete.tarefa,
-                            icon: '📋',
-                            tag: 'lembrete-' + lembrete.id
-                        });
-                    }, tempoAteNotificacao);
-                }
-            }
-        }
-
-        // Inicializar app
-        document.addEventListener('DOMContentLoaded', function() {
-            updateDate();
-            atualizarListaLembretes();
-            verificarLembretesUrgentes();
-            atualizarTreinoHoje();
-            atualizarRefeicoesHoje();
-            atualizarResumoFinanceiro();
-            atualizarListaGastos();
-            
-            // Solicitar permissão para notificações
-            if ('Notification' in window && Notification.permission === 'default') {
-                Notification.requestPermission().then(permission => {
-                    if (permission === 'granted') {
-                        console.log('Notificações permitidas!');
-                    }
-                });
-            }
-        });
-
-        // Atualizar verificações periodicamente
-        setInterval(() => {
-            updateDate();
-            verificarLembretesUrgentes();
-        }, 60000);
-    </script>
-</body>
-</html>
+                        <h4 style="color: #
