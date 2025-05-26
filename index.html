@@ -1,235 +1,4 @@
-// FUNÇÕES FINANCEIRAS
-        let salario = parseFloat(localStorage.getItem('salario')) || 0;
-        let gastosFixos = JSON.parse(localStorage.getItem('gastosFixos')) || [];
-        let gastosVariaveis = JSON.parse(localStorage.getItem('gastosVariaveis')) || [];
-        let mesAtual = new Date().getMonth() + '-' + new Date().getFullYear();
-
-        function mostrarConfigSalario() {
-            document.getElementById('configSalario').style.display = 'block';
-            document.getElementById('salarioInput').value = salario || '';
-        }
-
-        function cancelarConfigSalario() {
-            document.getElementById('configSalario').style.display = 'none';
-        }
-
-        function salvarSalario() {
-            const novoSalario = parseFloat(document.getElementById('salarioInput').value) || 0;
-            salario = novoSalario;
-            localStorage.setItem('salario', salario.toString());
-            
-            cancelarConfigSalario();
-            atualizarResumoFinanceiro();
-            alert('Salário salvo com sucesso!');
-        }
-
-        // GASTOS FIXOS
-        function mostrarFormGastoFixo() {
-            document.getElementById('modalGastoFixo').style.display = 'block';
-        }
-
-        function fecharFormGastoFixo() {
-            document.getElementById('modalGastoFixo').style.display = 'none';
-            document.getElementById('descricaoGastoFixo').value = '';
-            document.getElementById('valorGastoFixo').value = '';
-        }
-
-        function salvarGastoFixo() {
-            const descricao = document.getElementById('descricaoGastoFixo').value.trim();
-            const valor = parseFloat(document.getElementById('valorGastoFixo').value);
-            
-            if (!descricao) {
-                alert('Por favor, digite a descrição do gasto fixo!');
-                return;
-            }
-            
-            if (!valor || valor <= 0) {
-                alert('Por favor, digite um valor válido!');
-                return;
-            }
-            
-            const novoGastoFixo = {
-                id: Date.now(),
-                descricao,
-                valor
-            };
-            
-            gastosFixos.push(novoGastoFixo);
-            localStorage.setItem('gastosFixos', JSON.stringify(gastosFixos));
-            
-            fecharFormGastoFixo();
-            atualizarListaGastosFixos();
-            atualizarResumoFinanceiro();
-        }
-
-        function excluirGastoFixo(id) {
-            if (confirm('Tem certeza que deseja excluir este gasto fixo?')) {
-                gastosFixos = gastosFixos.filter(g => g.id !== id);
-                localStorage.setItem('gastosFixos', JSON.stringify(gastosFixos));
-                atualizarListaGastosFixos();
-                atualizarResumoFinanceiro();
-            }
-        }
-
-        // GASTOS VARIÁVEIS
-        function mostrarFormGastoVariavel() {
-            document.getElementById('modalGastoVariavel').style.display = 'block';
-            document.getElementById('dataGastoVariavel').value = new Date().toISOString().split('T')[0];
-        }
-
-        function fecharFormGastoVariavel() {
-            document.getElementById('modalGastoVariavel').style.display = 'none';
-            document.getElementById('descricaoGastoVariavel').value = '';
-            document.getElementById('valorGastoVariavel').value = '';
-            document.getElementById('dataGastoVariavel').value = '';
-        }
-
-        function salvarGastoVariavel() {
-            const descricao = document.getElementById('descricaoGastoVariavel').value.trim();
-            const valor = parseFloat(document.getElementById('valorGastoVariavel').value);
-            const data = document.getElementById('dataGastoVariavel').value;
-            
-            if (!descricao) {
-                alert('Por favor, digite a descrição do gasto!');
-                return;
-            }
-            
-            if (!valor || valor <= 0) {
-                alert('Por favor, digite um valor válido!');
-                return;
-            }
-            
-            if (!data) {
-                alert('Por favor, selecione a data!');
-                return;
-            }
-            
-            const novoGasto = {
-                id: Date.now(),
-                descricao,
-                valor,
-                data,
-                mes: mesAtual
-            };
-            
-            gastosVariaveis.push(novoGasto);
-            localStorage.setItem('gastosVariaveis', JSON.stringify(gastosVariaveis));
-            
-            fecharFormGastoVariavel();
-            atualizarListaGastosVariaveis();
-            atualizarResumoFinanceiro();
-        }
-
-        function excluirGastoVariavel(id) {
-            if (confirm('Tem certeza que deseja excluir este gasto?')) {
-                gastosVariaveis = gastosVariaveis.filter(g => g.id !== id);
-                localStorage.setItem('gastosVariaveis', JSON.stringify(gastosVariaveis));
-                atualizarListaGastosVariaveis();
-                atualizarResumoFinanceiro();
-            }
-        }
-
-        function resetarMes() {
-            if (confirm('Tem certeza que deseja resetar o mês? Todos os gastos variáveis serão apagados!')) {
-                gastosVariaveis = gastosVariaveis.filter(g => g.mes !== mesAtual);
-                localStorage.setItem('gastosVariaveis', JSON.stringify(gastosVariaveis));
-                
-                atualizarListaGastosVariaveis();
-                atualizarResumoFinanceiro();
-                alert('Mês resetado com sucesso!');
-            }
-        }
-
-        function formatarMoeda(valor) {
-            return 'R$ ' + valor.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-        }
-
-        function atualizarResumoFinanceiro() {
-            const saldoDiv = document.getElementById('saldoDisponivel');
-            
-            // Calcular totais
-            const totalGastosFixos = gastosFixos.reduce((total, gasto) => total + gasto.valor, 0);
-            const gastosDoMes = gastosVariaveis
-                .filter(g => g.mes === mesAtual)
-                .reduce((total, gasto) => total + gasto.valor, 0);
-            
-            const rendaBase = salario - totalGastosFixos; // Renda disponível inicial
-            const saldoAtual = rendaBase - gastosDoMes; // Saldo restante
-            
-            if (salario === 0) {
-                saldoDiv.innerHTML = `
-                    <div class="empty-state">
-                        <span class="icon">💵</span>
-                        <h3>Configure seu salário</h3>
-                        <p>Defina sua renda mensal para começar</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            // Calcular percentual gasto da renda disponível
-            const percentualGasto = rendaBase > 0 ? (gastosDoMes / rendaBase) * 100 : 0;
-            const corProgresso = percentualGasto > 100 ? '#dc3545' : percentualGasto > 80 ? '#ffc107' : '#28a745';
-            
-            saldoDiv.innerHTML = `
-                <div class="saldo-principal">
-                    <div class="saldo-valor">${formatarMoeda(saldoAtual)}</div>
-                    <div class="saldo-label">Saldo Disponível</div>
-                </div>
-                
-                <div class="resumo-grid">
-                    <div class="resumo-item">
-                        <span class="valor" style="color: #28a745;">${formatarMoeda(salario)}</span>
-                        <span class="label">Salário Mensal</span>
-                    </div>
-                    <div class="resumo-item">
-                        <span class="valor" style="color: #ffc107;">${formatarMoeda(totalGastosFixos)}</span>
-                        <span class="label">Gastos Fixos</span>
-                    </div>
-                </div>
-                
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
-                    <div class="progresso-info">
-                        <span>Gasto da renda disponível</span>
-                        <span><strong>${percentualGasto.toFixed(1)}%</strong></span>
-                    </div>
-                    <div class="progresso-container">
-                        <div class="progresso-barra" style="width: ${Math.min(percentualGasto, 100)}%; background-color: ${corProgresso};"></div>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; font-size: 12px; color: #6c757d; margin-top: 5px;">
-                        <span>Gastou: ${formatarMoeda(gastosDoMes)}</span>
-                        <span>Disponível: ${formatarMoeda(rendaBase)}</span>
-                    </div>
-                </div>
-            `;
-        }
-
-        function atualizarListaGastosFixos() {
-            const listaDiv = document.getElementById('listaGastosFixos');
-            
-            if (gastosFixos.length === 0) {
-                listaDiv.innerHTML = `
-                    <div style="text-align: center; color: #6c757d; padding: 15px;">
-                        <p>Nenhum gasto fixo cadastrado</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            const totalGastosFixos = gastosFixos.reduce((total, gasto) => total + gasto.valor, 0);
-            
-            listaDiv.innerHTML = `
-                ${gastosFixos.map(gasto => `
-                    <div class="gasto-fixo-item">
-                        <div class="gasto-info">
-                            <div class="gasto-descricao">${gasto.descricao}</div>
-                        </div>
-                        <div class="gasto-valor">${formatarMoeda(gasto.valor)}</div>
-                        <button class="btn-excluir" onclick="excluirGastoFixo(${gasto.id})">🗑️</button>
-                    </div>
-                `).join('')}
-                
-                <div class="total-gas<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -1823,79 +1592,8 @@
 
         // FUNÇÕES FINANCEIRAS
         let configFinanceira = JSON.parse(localStorage.getItem('configFinanceira')) || { salario: 0, gastosFixos: 0 };
-        let gastosFixosIndividuais = JSON.parse(localStorage.getItem('gastosFixosIndividuais')) || [];
         let gastosVariaveis = JSON.parse(localStorage.getItem('gastosVariaveis')) || [];
         let mesAtual = new Date().getMonth() + '-' + new Date().getFullYear();
-
-        function mostrarConfigFinanceira() {
-            document.getElementById('configFinanceira').style.display = 'block';
-            document.getElementById('salarioInput').value = configFinanceira.salario || '';
-            // Remover o campo de gastos fixos totais
-            document.getElementById('gastosFixosInput').style.display = 'none';
-            document.querySelector('label[for="gastosFixosInput"]').style.display = 'none';
-        }
-
-        function adicionarGastoFixo() {
-            const descricao = prompt('Descrição do gasto fixo (ex: Academia):');
-            if (!descricao) return;
-            
-            const valor = prompt('Valor mensal (ex: 150):');
-            if (!valor || isNaN(valor) || valor <= 0) {
-                alert('Valor inválido!');
-                return;
-            }
-            
-            const novoGastoFixo = {
-                id: Date.now(),
-                descricao: descricao,
-                valor: parseFloat(valor)
-            };
-            
-            gastosFixosIndividuais.push(novoGastoFixo);
-            localStorage.setItem('gastosFixosIndividuais', JSON.stringify(gastosFixosIndividuais));
-            
-            atualizarListaGastosFixos();
-            atualizarResumoFinanceiro();
-        }
-
-        function excluirGastoFixo(id) {
-            if (confirm('Tem certeza que deseja excluir este gasto fixo?')) {
-                gastosFixosIndividuais = gastosFixosIndividuais.filter(g => g.id !== id);
-                localStorage.setItem('gastosFixosIndividuais', JSON.stringify(gastosFixosIndividuais));
-                atualizarListaGastosFixos();
-                atualizarResumoFinanceiro();
-            }
-        }
-
-        function atualizarListaGastosFixos() {
-            // Adicionar lista de gastos fixos na interface
-            const gastosFixosDiv = document.getElementById('listaGastos');
-            
-            if (gastosFixosIndividuais.length > 0) {
-                const totalGastosFixos = gastosFixosIndividuais.reduce((total, gasto) => total + gasto.valor, 0);
-                
-                const gastosFixosHTML = `
-                    <div style="margin-bottom: 20px; padding: 15px; background: #fff3cd; border-radius: 8px; border: 1px solid #ffeaa7;">
-                        <h5 style="color: #856404; margin: 0 0 10px 0;">🏠 Gastos Fixos Mensais</h5>
-                        ${gastosFixosIndividuais.map(gasto => `
-                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1c40f;">
-                                <span style="color: #333;">${gasto.descricao}</span>
-                                <div>
-                                    <span style="font-weight: bold; color: #856404; margin-right: 10px;">R$ ${gasto.valor.toFixed(2).replace('.', ',')}</span>
-                                    <button onclick="excluirGastoFixo(${gasto.id})" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 12px;">🗑️</button>
-                                </div>
-                            </div>
-                        `).join('')}
-                        <div style="margin-top: 10px; padding: 8px; background: #f1c40f; border-radius: 4px; text-align: center;">
-                            <strong style="color: #333;">Total: R$ ${totalGastosFixos.toFixed(2).replace('.', ',')}</strong>
-                        </div>
-                        <button onclick="adicionarGastoFixo()" style="width: 100%; margin-top: 10px; background: #f39c12; color: white; border: none; padding: 8px; border-radius: 4px; font-weight: 600;">+ Adicionar Gasto Fixo</button>
-                    </div>
-                `;
-                
-                gastosFixosDiv.innerHTML = gastosFixosHTML + gastosFixosDiv.innerHTML.replace(gastosFixosHTML, '');
-            }
-        }
 
         function mostrarConfigFinanceira() {
             document.getElementById('configFinanceira').style.display = 'block';
@@ -1993,12 +1691,12 @@
             
             // Calcular totais
             const salario = configFinanceira.salario || 0;
-            const totalGastosFixos = gastosFixosIndividuais.reduce((total, gasto) => total + gasto.valor, 0);
+            const gastosFixos = configFinanceira.gastosFixos || 0;
             const gastosDoMes = gastosVariaveis
                 .filter(g => g.mes === mesAtual)
                 .reduce((total, gasto) => total + gasto.valor, 0);
             
-            const saldoDisponivel = salario - totalGastosFixos - gastosDoMes;
+            const saldoDisponivel = salario - gastosFixos - gastosDoMes;
             const isPositivo = saldoDisponivel >= 0;
             
             if (salario === 0) {
@@ -2028,7 +1726,7 @@
                         <div>Salário</div>
                     </div>
                     <div class="item-resumo">
-                        <span class="valor" style="color: #ffc107;">R$ ${totalGastosFixos.toFixed(2).replace('.', ',')}</span>
+                        <span class="valor" style="color: #ffc107;">R$ ${gastosFixos.toFixed(2).replace('.', ',')}</span>
                         <div>Gastos Fixos</div>
                     </div>
                     <div class="item-resumo">
@@ -2154,7 +1852,6 @@
             atualizarRefeicoesHoje();
             atualizarResumoFinanceiro();
             atualizarListaGastos();
-            atualizarListaGastosFixos();
             
             // Solicitar permissão para notificações
             if ('Notification' in window && Notification.permission === 'default') {
